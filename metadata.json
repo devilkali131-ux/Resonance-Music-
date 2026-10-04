@@ -1,0 +1,6 @@
+{
+  "name": "Resonance Music - Pure Stream & Studio Sound",
+  "description": "Resonance Music - Modern dark-mode music streaming player with real-time YouTube Music streaming, Spotify integration, and synced LRCLIB lyrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

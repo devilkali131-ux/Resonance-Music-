@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --color-obsidian-950: #07080c;
+  --color-obsidian-900: #0c0e15;
+  --color-obsidian-850: #121520;
+  --color-obsidian-800: #181d2a;
+  --color-obsidian-700: #22293a;
+  --color-neon-cyan: #00f0ff;
+  --color-neon-violet: #8b5cf6;
+  --color-neon-amber: #f59e0b;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #07080c;
+    color: #e2e8f0;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom discreet scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(12, 14, 21, 0.4);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Custom range input slider for modern sleek audio player */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]:focus {
+  outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  margin-top: -4px;
+  transition: transform 0.1s ease;
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.3);
+}

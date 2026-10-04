@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0c16" />
+      <stop offset="50%" stop-color="#12182b" />
+      <stop offset="100%" stop-color="#07080f" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5ff" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5ff" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#ec4899" stop-opacity="0.8" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle with glass rim -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  <rect x="8" y="8" width="496" height="496" rx="120" stroke="white" stroke-opacity="0.12" stroke-width="4" />
+
+  <!-- Ambient light orb behind harp -->
+  <circle cx="256" cy="256" r="140" fill="url(#primaryGrad)" opacity="0.18" filter="url(#glow)" />
+
+  <!-- Lyra Celestial Music Harp -->
+  <g filter="url(#glow)">
+    <!-- Outer Harp Arch -->
+    <path d="M160 140 C 220 100, 310 110, 350 160 C 370 190, 360 250, 310 320 C 280 360, 240 380, 220 390 L 160 390 C 180 320, 160 210, 160 140 Z" 
+          stroke="url(#primaryGrad)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    
+    <!-- Harp Strings (Sound Vibrations) -->
+    <line x1="205" y1="160" x2="205" y2="385" stroke="url(#primaryGrad)" stroke-width="8" stroke-linecap="round" opacity="0.9" />
+    <line x1="240" y1="145" x2="240" y2="380" stroke="url(#primaryGrad)" stroke-width="9" stroke-linecap="round" />
+    <line x1="275" y1="148" x2="275" y2="360" stroke="url(#primaryGrad)" stroke-width="8" stroke-linecap="round" opacity="0.9" />
+    <line x1="310" y1="175" x2="310" y2="325" stroke="url(#primaryGrad)" stroke-width="7" stroke-linecap="round" opacity="0.75" />
+
+    <!-- Crown star representing Lyra Alpha (Vega) -->
+    <circle cx="350" cy="160" r="12" fill="#00f5ff" />
+    <circle cx="160" cy="140" r="10" fill="#ec4899" />
+    <circle cx="220" cy="390" r="8" fill="#8b5cf6" />
+  </g>
+</svg>

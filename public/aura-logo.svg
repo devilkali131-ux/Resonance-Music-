@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="auraGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff" />
+      <stop offset="50%" stop-color="#7928ca" />
+      <stop offset="100%" stop-color="#ff0080" />
+    </linearGradient>
+    <radialGradient id="auraCenter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.8" />
+      <stop offset="60%" stop-color="#7928ca" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#07080d" stop-opacity="0" />
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Deep space background rounded container -->
+  <rect width="200" height="200" rx="48" fill="#090a12" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+
+  <!-- Radial ambient glow -->
+  <circle cx="100" cy="100" r="70" fill="url(#auraCenter)" />
+
+  <!-- Outer Glass Ring -->
+  <circle cx="100" cy="100" r="68" fill="none" stroke="url(#auraGlow)" stroke-width="4" stroke-opacity="0.4" stroke-dasharray="8 6"/>
+
+  <!-- Waveform Aura Sound Bars in Center (Dynamic Aura Symbol) -->
+  <g filter="url(#glow)">
+    <rect x="46" y="85" width="8" height="30" rx="4" fill="url(#auraGlow)"/>
+    <rect x="62" y="70" width="8" height="60" rx="4" fill="url(#auraGlow)"/>
+    <rect x="78" y="55" width="8" height="90" rx="4" fill="url(#auraGlow)"/>
+    <rect x="94" y="42" width="12" height="116" rx="6" fill="#00f0ff"/>
+    <rect x="114" y="55" width="8" height="90" rx="4" fill="url(#auraGlow)"/>
+    <rect x="130" y="70" width="8" height="60" rx="4" fill="url(#auraGlow)"/>
+    <rect x="146" y="85" width="8" height="30" rx="4" fill="url(#auraGlow)"/>
+  </g>
+
+  <!-- Specular inner rim -->
+  <circle cx="100" cy="100" r="82" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+</svg>
