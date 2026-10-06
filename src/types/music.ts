@@ -8,7 +8,6 @@ export type ActiveTab =
   | 'discover'
   | 'search'
   | 'ml-studio'
-  | 'offline-vault'
   | 'library'
   | 'favorites'
   | 'history'

@@ -18,7 +18,7 @@ import {
   Music,
   Check,
 } from 'lucide-react';
-import { EqualizerState, Track } from '../types/music';
+import { EqualizerState, Playlist, Track } from '../types/music';
 import { AmbientArtGlow } from './AmbientArtGlow';
 import { extractDominantPalette, TrackPalette } from '../utils/colorExtractor';
 
@@ -46,6 +46,12 @@ interface ImmersivePlayerModalProps {
   onDownloadTrack?: () => void;
   isDownloaded?: boolean;
   isDownloading?: boolean;
+  sleepTimerRemainingSec?: number | null;
+  sleepTimerMinutes?: number | null;
+  onSetSleepTimer?: (minutes: number | null) => void;
+  onAddToPlaylist?: () => void;
+  activePlaylist?: Playlist | null;
+  onOpenPlaylist?: (playlist: Playlist) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -79,15 +85,72 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
   onDownloadTrack,
   isDownloaded = false,
   isDownloading = false,
+  sleepTimerRemainingSec: propSleepSec,
+  sleepTimerMinutes: propSleepMinutes,
+  onSetSleepTimer,
+  onAddToPlaylist,
+  activePlaylist,
+  onOpenPlaylist,
 }) => {
   const [ambientPalette, setAmbientPalette] = useState<TrackPalette | null>(null);
   const [showLyricsDrawer, setShowLyricsDrawer] = useState(false);
   const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
-  const [sleepTimerRemainingSec, setSleepTimerRemainingSec] = useState<number | null>(null);
+  const [customTimerMinutes, setCustomTimerMinutes] = useState('20');
+  const [localSleepTimerMinutes, setLocalSleepTimerMinutes] = useState<number | null>(null);
+  const [localSleepTimerRemainingSec, setLocalSleepTimerRemainingSec] = useState<number | null>(null);
+
+  const activeSleepMinutes = propSleepMinutes !== undefined ? propSleepMinutes : localSleepTimerMinutes;
+  const activeSleepSec = propSleepSec !== undefined ? propSleepSec : localSleepTimerRemainingSec;
 
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Touch swipe gesture handlers for swiping between tracks
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - (touchStartY.current ?? e.changedTouches[0].clientY);
+
+    // If horizontal swipe is dominant and exceeds 45px threshold
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 45) {
+      if (deltaX < 0) {
+        onNext(); // swipe left -> next track
+      } else {
+        onPrevious(); // swipe right -> previous track
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // Dynamic animation generator per track cover
+  const getTrackCoverAnimation = useCallback((t: Track, playing: boolean) => {
+    if (!playing) return 'scale-100 transition-transform duration-700';
+    const sum = t.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const mode = (sum + (t.genre ? t.genre.charCodeAt(0) : 0)) % 6;
+    switch (mode) {
+      case 0:
+        return 'animate-[pulse_2.5s_ease-in-out_infinite] scale-[1.03] shadow-[0_0_50px_rgba(236,72,153,0.5)]';
+      case 1:
+        return 'animate-[spin_24s_linear_infinite] rounded-full scale-[1.02] shadow-[0_0_50px_rgba(6,182,212,0.5)]';
+      case 2:
+        return 'animate-[bounce_3.5s_ease-in-out_infinite] scale-[1.02] shadow-[0_0_50px_rgba(168,85,247,0.5)]';
+      case 3:
+        return 'scale-[1.04] animate-pulse transition-transform duration-1000 shadow-[0_0_55px_rgba(245,158,11,0.5)]';
+      case 4:
+        return 'rotate-[-1deg] scale-[1.02] transition-transform duration-500 shadow-[0_0_50px_rgba(16,185,129,0.5)]';
+      case 5:
+      default:
+        return 'scale-[1.03] transition-all duration-700 shadow-[0_0_60px_rgba(99,102,241,0.6)]';
+    }
+  }, []);
 
   // Extract atmospheric palette from track artwork
   useEffect(() => {
@@ -98,31 +161,32 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
     }
   }, [track]);
 
-  // Handle sleep timer countdown
+  // Handle local sleep timer countdown if not provided by parent
   useEffect(() => {
-    if (sleepTimerRemainingSec === null) return;
-    if (sleepTimerRemainingSec <= 0) {
+    if (onSetSleepTimer) return; // parent handles it
+    if (localSleepTimerRemainingSec === null) return;
+    if (localSleepTimerRemainingSec <= 0) {
       if (isPlaying) {
         onTogglePlay();
       }
-      setSleepTimerMinutes(null);
-      setSleepTimerRemainingSec(null);
+      setLocalSleepTimerMinutes(null);
+      setLocalSleepTimerRemainingSec(null);
       return;
     }
 
     const interval = setInterval(() => {
-      setSleepTimerRemainingSec((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+      setLocalSleepTimerRemainingSec((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [sleepTimerRemainingSec, isPlaying, onTogglePlay]);
+  }, [localSleepTimerRemainingSec, isPlaying, onTogglePlay, onSetSleepTimer]);
 
   const setSleepTimer = (minutes: number | null) => {
-    setSleepTimerMinutes(minutes);
-    if (minutes === null) {
-      setSleepTimerRemainingSec(null);
+    if (onSetSleepTimer) {
+      onSetSleepTimer(minutes);
     } else {
-      setSleepTimerRemainingSec(minutes * 60);
+      setLocalSleepTimerMinutes(minutes);
+      setLocalSleepTimerRemainingSec(minutes === null ? null : minutes * 60);
     }
     setShowSleepTimerModal(false);
   };
@@ -157,6 +221,8 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
 
   return (
     <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       className="fixed inset-0 z-50 flex flex-col justify-between overflow-hidden select-none animate-fadeIn transition-colors duration-700"
       style={{
         backgroundColor: ambientPalette?.rgbPrimary
@@ -170,7 +236,7 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
       }}
     >
       {/* ------------------------------------------------------------- */}
-      {/* TOP HEADER: Centered "Now Playing" and Mix Title              */}
+      {/* TOP HEADER: Centered "Now Playing" or Active Playlist Button  */}
       {/* ------------------------------------------------------------- */}
       <header className="relative flex items-center justify-between px-5 sm:px-8 pt-4 pb-2 z-20 w-full">
         {/* Minimize Button (Left) */}
@@ -182,15 +248,29 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
           <ChevronDown className="w-6 h-6 stroke-[2.2]" />
         </button>
 
-        {/* Centered Track Context */}
-        <div className="text-center absolute left-1/2 -translate-x-1/2 pointer-events-none max-w-[220px] sm:max-w-xs">
-          <p className="text-[11px] sm:text-xs text-white/60 font-medium tracking-wide">
-            Now Playing
-          </p>
-          <p className="text-xs sm:text-sm font-bold text-white/95 truncate mt-0.5">
-            {track.album ? `${track.album}` : `${track.title} Mix`}
-          </p>
-        </div>
+        {/* Centered Track / Playlist Context Button */}
+        {activePlaylist ? (
+          <button
+            onClick={() => {
+              onClose();
+              if (onOpenPlaylist) onOpenPlaylist(activePlaylist);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-white transition-all cursor-pointer shadow-lg active:scale-95"
+            title={`Playing from ${activePlaylist.name} - Tap to view playlist`}
+          >
+            <ListMusic className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="truncate max-w-[130px] sm:max-w-[170px]">{activePlaylist.name}</span>
+          </button>
+        ) : (
+          <div className="text-center absolute left-1/2 -translate-x-1/2 pointer-events-none max-w-[220px] sm:max-w-xs">
+            <p className="text-[11px] sm:text-xs text-white/60 font-medium tracking-wide">
+              Now Playing
+            </p>
+            <p className="text-xs sm:text-sm font-bold text-white/95 truncate mt-0.5">
+              {track.album ? `${track.album}` : `${track.title} Mix`}
+            </p>
+          </div>
+        )}
 
         {/* Top Right Quick Share */}
         <button
@@ -206,7 +286,7 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
       {/* MAIN BODY: Large Artwork, Track Details, Scrubber & Controls  */}
       {/* ------------------------------------------------------------- */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-10 max-w-md mx-auto w-full space-y-5 sm:space-y-6 py-2">
-        {/* Large Square Album Artwork */}
+        {/* Large Square Album Artwork with Click-to-Show Lyrics and Distinct Animation */}
         <div className="w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] aspect-square mx-auto">
           <AmbientArtGlow
             coverUrl={track.coverUrl}
@@ -214,17 +294,30 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
             isPlaying={isPlaying}
             glowIntensity="immersive"
           >
-            <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-2xl shadow-black/95 border border-white/10 select-none bg-black/40">
+            <div
+              onClick={() => setShowLyricsDrawer(true)}
+              className="relative w-full h-full rounded-3xl overflow-hidden shadow-2xl shadow-black/95 border border-white/10 select-none bg-black/40 cursor-pointer group"
+              title="Tap artwork to view synchronized karaoke lyrics"
+            >
               <img
                 src={track.coverUrl}
                 alt={track.title}
-                className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                className={`w-full h-full object-cover transition-transform duration-700 ${getTrackCoverAnimation(
+                  track,
+                  isPlaying
+                )}`}
               />
+              {/* Tap to show lyrics overlay badge */}
+              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                <span className="px-3.5 py-1.5 rounded-full bg-black/70 backdrop-blur-md text-xs font-semibold text-white border border-white/20 flex items-center gap-1.5 shadow-xl">
+                  <FileText className="w-3.5 h-3.5 text-cyan-400" /> Tap for Lyrics
+                </span>
+              </div>
             </div>
           </AmbientArtGlow>
         </div>
 
-        {/* Track Title, Artist & Squircle Action Buttons (Download + Like) */}
+        {/* Track Title, Artist & Squircle Action Buttons (Download + Like + Lyrics) */}
         <div className="flex items-center justify-between w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] pt-1">
           {/* Song and Artist Info */}
           <div className="min-w-0 flex-1 pr-3">
@@ -236,8 +329,8 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
             </p>
           </div>
 
-          {/* Squircle Action Buttons matching screenshot */}
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          {/* Squircle Action Buttons: Download + Like + Lyrics */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* 1. Download Button (White Squircle with Download Icon) */}
             {onDownloadTrack && (
               <button
@@ -245,7 +338,7 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
                   e.stopPropagation();
                   onDownloadTrack();
                 }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95 ${
+                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95 ${
                   isDownloaded
                     ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
                     : isDownloading
@@ -264,13 +357,29 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
               </button>
             )}
 
-            {/* 2. Heart / Like Button (White Squircle with Heart Icon) */}
+            {/* 2. Lyrics Button (White Squircle with FileText / Lyrics Icon) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLyricsDrawer(!showLyricsDrawer);
+              }}
+              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95 ${
+                showLyricsDrawer
+                  ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300'
+                  : 'bg-white text-black hover:bg-slate-200'
+              }`}
+              title="Toggle Synced Lyrics"
+            >
+              <FileText className="w-5 h-5 stroke-[2.5]" />
+            </button>
+
+            {/* 3. Heart / Like Button (White Squircle with Heart Icon) */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleLike();
               }}
-              className="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer shadow-lg active:scale-95"
+              className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white text-black flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer shadow-lg active:scale-95"
               title={isLiked ? 'Unlike song' : 'Like song'}
             >
               <Heart
@@ -407,18 +516,18 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
           <button
             onClick={() => setShowSleepTimerModal(true)}
             className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 relative ${
-              sleepTimerMinutes !== null
+              activeSleepMinutes !== null
                 ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-md shadow-amber-500/20'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80 hover:text-white'
             }`}
             title={
-              sleepTimerMinutes
-                ? `Sleep Timer: ${Math.ceil((sleepTimerRemainingSec || 0) / 60)}m left`
+              activeSleepMinutes
+                ? `Sleep Timer: ${Math.ceil((activeSleepSec || 0) / 60)}m left`
                 : 'Set Sleep Timer'
             }
           >
             <Moon className="w-5 h-5 stroke-[2]" />
-            {sleepTimerMinutes !== null && (
+            {activeSleepMinutes !== null && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
             )}
           </button>
@@ -530,7 +639,7 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* OVERLAY 2: SLEEP TIMER MODAL                                  */}
+      {/* OVERLAY 2: SLEEP TIMER MODAL (Presets + User Custom Timer)    */}
       {/* ------------------------------------------------------------- */}
       {showSleepTimerModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
@@ -549,40 +658,83 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
             </div>
 
             <p className="text-xs text-slate-400">
-              Music will automatically pause when the selected duration expires.
+              Schedule music to fade out smoothly and pause after a set duration.
             </p>
 
+            {/* Presets: 15, 30, 45, 60 minutes */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
               {[15, 30, 45, 60].map((mins) => (
                 <button
                   key={mins}
                   onClick={() => setSleepTimer(mins)}
                   className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
-                    sleepTimerMinutes === mins
+                    activeSleepMinutes === mins
                       ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20'
                       : 'bg-white/5 hover:bg-white/10 text-white border-white/10'
                   }`}
                 >
                   <span>{mins} minutes</span>
-                  {sleepTimerMinutes === mins && <Check className="w-4 h-4 stroke-[3]" />}
+                  {activeSleepMinutes === mins && <Check className="w-4 h-4 stroke-[3]" />}
                 </button>
               ))}
             </div>
 
-            {sleepTimerMinutes !== null && (
-              <button
-                onClick={() => setSleepTimer(null)}
-                className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Cancel Active Timer ({Math.ceil((sleepTimerRemainingSec || 0) / 60)}m left)
-              </button>
+            {/* User Custom Timer Input */}
+            <div className="pt-2 border-t border-white/10 space-y-2">
+              <span className="text-xs font-semibold text-white/90">User Custom Timer</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="360"
+                  value={customTimerMinutes}
+                  onChange={(e) => setCustomTimerMinutes(e.target.value)}
+                  placeholder="Minutes"
+                  className="w-24 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-amber-400"
+                />
+                <span className="text-xs text-slate-400 font-medium">mins</span>
+                <button
+                  onClick={() => {
+                    const m = parseInt(customTimerMinutes, 10);
+                    if (!isNaN(m) && m > 0) {
+                      setSleepTimer(m);
+                    }
+                  }}
+                  className="flex-1 py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  Set Custom Timer
+                </button>
+              </div>
+            </div>
+
+            {/* Active Timer Indicator & Cancel Button */}
+            {activeSleepMinutes !== null && (
+              <div className="space-y-2 pt-1 border-t border-white/10">
+                <div className="flex items-center justify-between text-xs text-amber-300 font-mono">
+                  <span>Active Timer:</span>
+                  <span>
+                    {Math.floor((activeSleepSec || 0) / 60)}m {((activeSleepSec || 0) % 60)}s remaining
+                  </span>
+                </div>
+                {activeSleepSec !== null && activeSleepSec <= 20 && (
+                  <p className="text-[11px] text-amber-400/80 italic text-center animate-pulse">
+                    Fading out volume smoothly...
+                  </p>
+                )}
+                <button
+                  onClick={() => setSleepTimer(null)}
+                  className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel Timer
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* OVERLAY 3: MORE OPTIONS MODAL (•••)                           */}
+      {/* OVERLAY 3: MORE OPTIONS MODAL (•••) - Streamlined & Clean     */}
       {/* ------------------------------------------------------------- */}
       {showMoreMenu && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
@@ -600,7 +752,31 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
               </button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              {onAddToPlaylist && (
+                <button
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onAddToPlaylist();
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+                >
+                  <ListMusic className="w-4 h-4 text-cyan-400" />
+                  <span>Add to Custom Playlist</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  setShowSleepTimerModal(true);
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+              >
+                <Moon className="w-4 h-4 text-amber-400" />
+                <span>Set Sleep Timer</span>
+              </button>
+
               <button
                 onClick={() => {
                   setShowMoreMenu(false);
@@ -608,57 +784,24 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
                 }}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
               >
-                <Share2 className="w-4 h-4 text-cyan-400" />
-                <span>Share Song & Link</span>
+                <Share2 className="w-4 h-4 text-pink-400" />
+                <span>Share Song</span>
               </button>
-
-              <button
-                onClick={() => {
-                  setShowMoreMenu(false);
-                  setShowLyricsDrawer(true);
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
-              >
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span>View Full Synced Lyrics</span>
-              </button>
-
-              {onOpenEqualizer && (
-                <button
-                  onClick={() => {
-                    setShowMoreMenu(false);
-                    onOpenEqualizer();
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
-                >
-                  <Sliders className="w-4 h-4 text-purple-400" />
-                  <span>Equalizer & Acoustic DSP</span>
-                </button>
-              )}
-
-              {onDownloadTrack && (
-                <button
-                  onClick={() => {
-                    setShowMoreMenu(false);
-                    onDownloadTrack();
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
-                >
-                  <Download className="w-4 h-4 text-amber-400" />
-                  <span>{isDownloaded ? 'Downloaded in Offline Vault' : 'Download for Offline Mode'}</span>
-                </button>
-              )}
             </div>
 
-            {/* Audio Specs Summary */}
-            <div className="pt-3 border-t border-white/10 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400">
-              <div className="p-2 rounded-lg bg-white/5">
-                <span className="text-slate-500 block text-[9px] uppercase">Audio Bitrate</span>
-                <span className="text-white font-bold">320 kbps High-Res</span>
+            {/* Song Meta Information */}
+            <div className="pt-3 border-t border-white/10 space-y-1.5 text-xs text-slate-400">
+              <div className="flex justify-between">
+                <span>Album</span>
+                <span className="text-white font-medium truncate max-w-[180px]">{track.album || track.title}</span>
               </div>
-              <div className="p-2 rounded-lg bg-white/5">
-                <span className="text-slate-500 block text-[9px] uppercase">Tempo & Key</span>
-                <span className="text-white font-bold">{track.bpm} BPM · {track.key}</span>
+              <div className="flex justify-between">
+                <span>Genre</span>
+                <span className="text-white font-medium">{track.genre}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Release</span>
+                <span className="text-white font-medium">{track.releaseYear || '2024'}</span>
               </div>
             </div>
           </div>

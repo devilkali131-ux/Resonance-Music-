@@ -87,7 +87,7 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
     },
     {
       id: 'search' as ActiveTab,
-      label: 'Search & Dictionary',
+      label: 'Search Music',
       desc: 'Instant global music search',
       icon: Search,
       color: 'from-cyan-500/20 to-purple-500/10 text-cyan-400 border-cyan-500/30',
@@ -100,14 +100,6 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
       icon: Radio,
       color: 'from-purple-500/20 to-indigo-500/10 text-purple-400 border-purple-500/30',
       badge: 'Synthesizer',
-    },
-    {
-      id: 'offline-vault' as ActiveTab,
-      label: 'Offline Vault',
-      desc: 'Offline playback & local cached tracks',
-      icon: HardDriveDownload,
-      color: 'from-emerald-500/20 to-teal-500/10 text-emerald-400 border-emerald-500/30',
-      count: offlineCount,
     },
   ];
 
@@ -224,11 +216,6 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
                           {item.badge}
                         </span>
                       )}
-                      {typeof item.count === 'number' && item.count > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
-                          {item.count} cached
-                        </span>
-                      )}
                     </div>
 
                     <div>
@@ -241,74 +228,10 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
                 );
               })}
             </div>
-
-            {/* Spotify Fast Sync banner */}
-            {onOpenSpotifySync && (
-              <div
-                onClick={() => {
-                  onClose();
-                  onOpenSpotifySync();
-                }}
-                className="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-[#1db954]/15 via-emerald-950/30 to-transparent border border-[#1db954]/30 hover:border-[#1db954]/60 cursor-pointer flex items-center justify-between group transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#1db954]/20 border border-[#1db954]/40 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-[#1db954]" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-white group-hover:text-[#1db954] transition-colors flex items-center gap-1.5">
-                      Spotify Fast Sync
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#1db954]/20 text-[#1db954]">
-                        Spotify Sync
-                      </span>
-                    </h5>
-                    <p className="text-[11px] text-slate-400">
-                      Paste any Spotify playlist or track link to import and match live YouTube streams
-                    </p>
-                  </div>
-                </div>
-                <button className="px-3 py-1.5 rounded-xl bg-[#1db954] text-slate-950 font-bold text-xs group-hover:scale-105 transition-transform">
-                  Sync Now
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Library Tabs & Playlists Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 border-t border-white/[0.06]">
-            {/* Owner Access Portal Action Banner - HIDDEN for normal users, only visible when owner is authenticated */}
-            {isOwner && onOpenOwnerPortal && (
-              <div
-                onClick={() => {
-                  onClose();
-                  onOpenOwnerPortal();
-                }}
-                className="col-span-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-cyan-500/15 border border-amber-400/30 hover:border-amber-400/60 transition-all cursor-pointer shadow-lg flex items-center justify-between group animate-fadeIn"
-              >
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-500 p-0.5 shadow-md shadow-amber-500/20">
-                    <div className="w-full h-full rounded-[14px] bg-[#0c0e18] flex items-center justify-center text-amber-300">
-                      <Shield className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors flex items-center gap-2">
-                      <span>Owner Access Portal</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                        Admin Only
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      View logged-in users, active devices, and generate account recovery keys
-                    </p>
-                  </div>
-                </div>
-                <button className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer">
-                  Open Portal →
-                </button>
-              </div>
-            )}
-
             {/* Audio Equalizer Quick Launcher */}
             {onOpenEqualizer && (
               <div
@@ -324,7 +247,7 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-300 transition-colors flex items-center gap-2">
-                      <span>Audio Equalizer (Pop-up)</span>
+                      <span>Audio Equalizer</span>
                       <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
                         Studio DSP
                       </span>
@@ -365,27 +288,6 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
                   );
                 })}
               </div>
-
-              {/* Storage Summary */}
-              {storageStats && (
-                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-1.5 mt-3">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1.5">
-                      <Database className="w-3.5 h-3.5 text-cyan-400" />
-                      Vault Storage
-                    </span>
-                    <span className="font-mono text-cyan-300">{storageStats.totalSizeMb} MB</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-cyan-400 to-amber-400 rounded-full"
-                      style={{
-                        width: `${Math.min(100, (storageStats.totalSizeMb / storageStats.maxStorageMb) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Playlists Horizontal / Grid Showcase */}

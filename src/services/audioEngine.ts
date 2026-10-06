@@ -7,6 +7,8 @@ type AudioEventCallback = (event: {
   buffered: number;
   isSynthesizedFallback?: boolean;
   isEnded?: boolean;
+  sleepTimerRemainingSec?: number | null;
+  sleepTimerMinutes?: number | null;
 }) => void;
 
 class AudioEngine {
@@ -18,6 +20,12 @@ class AudioEngine {
   private trebleFilter: BiquadFilterNode | null = null;
   private gainNode: GainNode | null = null;
   private analyserNode: AnalyserNode | null = null;
+
+  // Sleep Timer state with gradual fade-out
+  private sleepTimerDurationMinutes: number | null = null;
+  private sleepTimerTargetTime: number | null = null;
+  private sleepTimerInterval: number | null = null;
+  private preFadeVolume = 0.85;
 
   // Synthesizer fallback state
   private isSynthesizing = false;
@@ -518,6 +526,62 @@ class AudioEngine {
     if (this.trebleFilter) this.trebleFilter.gain.setValueAtTime(eq.treble, t);
   }
 
+  // -------------------------------------------------------------
+  // SLEEP TIMER WITH SMOOTH FADE-OUT
+  // -------------------------------------------------------------
+  public setSleepTimer(minutes: number | null) {
+    if (this.sleepTimerInterval) {
+      window.clearInterval(this.sleepTimerInterval);
+      this.sleepTimerInterval = null;
+    }
+
+    if (minutes === null || minutes <= 0) {
+      this.sleepTimerDurationMinutes = null;
+      this.sleepTimerTargetTime = null;
+      if (this.preFadeVolume > 0 && !this.isMuted) {
+        this.setVolume(this.preFadeVolume);
+      }
+      this.notify();
+      return;
+    }
+
+    this.sleepTimerDurationMinutes = minutes;
+    this.sleepTimerTargetTime = Date.now() + minutes * 60 * 1000;
+    this.preFadeVolume = this.volume > 0 ? this.volume : 0.85;
+
+    this.sleepTimerInterval = window.setInterval(() => {
+      if (!this.sleepTimerTargetTime) return;
+      const remainingMs = this.sleepTimerTargetTime - Date.now();
+
+      // Smooth fade-out in the final 20 seconds
+      if (remainingMs > 0 && remainingMs <= 20000) {
+        const factor = Math.max(0, remainingMs / 20000);
+        this.setVolume(this.preFadeVolume * factor);
+      } else if (remainingMs <= 0) {
+        // Sleep timer expired: pause playback, restore original volume, and clear timer
+        if (this.isPlaying) {
+          this.togglePlay();
+        }
+        this.setVolume(this.preFadeVolume);
+        this.setSleepTimer(null);
+        return;
+      }
+      this.notify();
+    }, 1000);
+
+    this.notify();
+  }
+
+  public getSleepTimerRemainingSeconds(): number | null {
+    if (!this.sleepTimerTargetTime) return null;
+    const remaining = Math.max(0, Math.ceil((this.sleepTimerTargetTime - Date.now()) / 1000));
+    return remaining;
+  }
+
+  public getSleepTimerMinutes(): number | null {
+    return this.sleepTimerDurationMinutes;
+  }
+
   public getAudioContext(): AudioContext | null {
     this.ensureAudioContext();
     return this.audioCtx;
@@ -739,6 +803,8 @@ class AudioEngine {
       buffered,
       isSynthesizedFallback: this.isSynthesizing,
       isEnded,
+      sleepTimerRemainingSec: this.getSleepTimerRemainingSeconds(),
+      sleepTimerMinutes: this.getSleepTimerMinutes(),
     };
 
     this.listeners.forEach((cb) => cb(payload));
@@ -751,6 +817,8 @@ class AudioEngine {
       isMuted: this.isMuted,
       currentTrack: this.currentTrack,
       isSynthesized: this.isSynthesizing,
+      sleepTimerMinutes: this.sleepTimerDurationMinutes,
+      sleepTimerRemainingSec: this.getSleepTimerRemainingSeconds(),
     };
   }
 }

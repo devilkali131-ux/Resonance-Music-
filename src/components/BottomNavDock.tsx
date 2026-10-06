@@ -27,7 +27,7 @@ export const BottomNavDock: React.FC<BottomNavDockProps> = ({
   const isLibraryActive = activeTab === 'library' || activeTab === 'favorites';
 
   return (
-    <nav className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2.5rem)] max-w-xs sm:max-w-sm rounded-full bg-[#14151b]/95 border border-white/[0.12] backdrop-blur-2xl shadow-2xl shadow-black/90 p-1.5 select-none transition-all">
+    <nav className="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xs sm:max-w-sm rounded-full bg-[#14151b]/95 border border-white/[0.12] backdrop-blur-2xl shadow-2xl shadow-black/90 p-1.5 select-none transition-all">
       {/* 4-Item Responsive Navigation Dock: Home, Search, Library, More */}
       <div className="flex items-center justify-between gap-1 w-full px-1">
         {/* 1. Home Tab: Expands to pill with label when active, icon only when inactive */}

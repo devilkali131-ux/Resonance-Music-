@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resonance Music - Pure Stream & Studio Sound</title>
+    <meta name="description" content="Resonance Music - Modern dark-mode music streaming player with real-time YouTube Music & Spotify streaming, offline playback, synced LRCLIB lyrics, and studio visualizers." />
+    <meta property="og:title" content="Resonance Music - Pure Stream & Studio Sound" />
+    <meta property="og:description" content="Resonance Music - Modern dark-mode music streaming player with real-time YouTube Music & Spotify streaming, offline playback, synced LRCLIB lyrics, and studio visualizers." />
+    <link rel="icon" type="image/svg+xml" href="/resonance-logo.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Resonance Music" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#07080c" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/assets/index-fyYTTPAS.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BUzlaKQw.css">
+  <link rel="manifest" href="/manifest.webmanifest"></head>
+  <body class="bg-[#090a0f] text-[#f1f3f7] antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div id="root"></div>
+    <!-- Audio/video engine anchor for YouTube Music playback (kept in viewport to prevent browser throttling) -->
+    <div id="resonance-yt-player-container" style="position: fixed; width: 200px; height: 120px; bottom: 0; right: 0; pointer-events: none; opacity: 0.01; z-index: 1;">
+      <div id="resonance-yt-player"></div>
+    </div>
+    <script src="https://www.youtube.com/iframe_api" async></script>
+  </body>
+</html>
+

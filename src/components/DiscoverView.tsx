@@ -127,22 +127,16 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             placeholder="Search any song, artist, album, or genre..."
             className="w-full pl-10 pr-24 py-2.5 sm:py-3 text-xs sm:text-sm bg-black/40 border border-white/[0.08] focus:border-cyan-400/60 rounded-2xl text-white placeholder:text-slate-500 focus:outline-none transition-all"
           />
-          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {localSearchInput && (
               <button
                 onClick={() => handleApplySearch('')}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                 title="Clear"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
-            <button
-              onClick={() => handleApplySearch(localSearchInput)}
-              className="px-3 py-1.5 rounded-xl bg-cyan-400 text-slate-950 font-bold text-xs hover:bg-cyan-300 transition-colors shadow-sm"
-            >
-              Search
-            </button>
           </div>
         </div>
 

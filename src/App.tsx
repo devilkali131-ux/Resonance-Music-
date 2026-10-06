@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { WifiOff } from 'lucide-react';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS } from './data/catalog';
 import { ActiveTab, DailyMix, EqualizerState, Playlist, SonicPersona, Track } from './types/music';
 import { audioEngine } from './services/audioEngine';
@@ -16,7 +17,6 @@ import { DailyMixView } from './components/DailyMixView';
 import { DiscoverView } from './components/DiscoverView';
 import { HistoryView } from './components/HistoryView';
 import { MLPlaylistStudio } from './components/MLPlaylistStudio';
-import { OfflineVaultView } from './components/OfflineVaultView';
 import { LibraryView } from './components/LibraryView';
 import { PlaylistDetailView } from './components/PlaylistDetailView';
 import { ImmersivePlayerModal } from './components/ImmersivePlayerModal';
@@ -35,6 +35,7 @@ export default function App() {
   // Navigation & View state
   const [activeTab, setActiveTab] = useState<ActiveTab>('daily');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [playingPlaylist, setPlayingPlaylist] = useState<Playlist | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Catalog & Playlists state
@@ -56,6 +57,10 @@ export default function App() {
   const [isSynthesizedFallback, setIsSynthesizedFallback] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
 
+  // Sleep Timer state
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  const [sleepTimerRemainingSec, setSleepTimerRemainingSec] = useState<number | null>(null);
+
   // Equalizer State
   const [equalizer, setEqualizer] = useState<EqualizerState>({
     bass: 0,
@@ -64,8 +69,30 @@ export default function App() {
     surround: false,
   });
 
+  // Automatic Offline Detection & Restriction
+  const [isDeviceOffline, setIsDeviceOffline] = useState(() =>
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsDeviceOffline(false);
+      setOfflineNotice(null);
+    };
+    const handleOffline = () => {
+      setIsDeviceOffline(true);
+      setOfflineNotice('You are offline. Only downloaded music can be played.');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Offline Management state
-  const [isOffline, setIsOffline] = useState(offlineStorage.isOfflineModeActive());
   const [downloadedTrackIds, setDownloadedTrackIds] = useState<string[]>(
     offlineStorage.getDownloadedTrackIds()
   );
@@ -98,6 +125,38 @@ export default function App() {
     mlService.getFavoriteTrackIds()
   );
 
+  const likedPlaylist: Playlist = useMemo(
+    () => ({
+      id: 'favorites-playlist',
+      name: 'Liked Songs',
+      description: 'Your collection of loved and favorited tracks.',
+      tagline: 'Favorites',
+      accentColor: '#ec4899',
+      coverGradient: 'linear-gradient(135deg, #831843 0%, #be185d 50%, #ec4899 100%)',
+      trackIds: favoriteTrackIds,
+      isAiGenerated: false,
+      createdAt: 'Favorites',
+      playCount: favoriteTrackIds.length,
+    }),
+    [favoriteTrackIds]
+  );
+
+  const downloadedPlaylist: Playlist = useMemo(
+    () => ({
+      id: 'downloaded-playlist',
+      name: 'Downloaded Music',
+      description: 'Songs saved offline to your device for playback without internet.',
+      tagline: 'Offline Available',
+      accentColor: '#10b981',
+      coverGradient: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)',
+      trackIds: downloadedTrackIds,
+      isAiGenerated: false,
+      createdAt: 'Offline Cache',
+      playCount: downloadedTrackIds.length,
+    }),
+    [downloadedTrackIds]
+  );
+
   // Sync Audio Engine state
   useEffect(() => {
     const unsubscribe = audioEngine.subscribe((event) => {
@@ -106,6 +165,8 @@ export default function App() {
       setIsPlaying(event.isPlaying);
       setBuffered(event.buffered);
       setIsSynthesizedFallback(!!event.isSynthesizedFallback);
+      if (event.sleepTimerMinutes !== undefined) setSleepTimerMinutes(event.sleepTimerMinutes);
+      if (event.sleepTimerRemainingSec !== undefined) setSleepTimerRemainingSec(event.sleepTimerRemainingSec);
 
       // Handle track completion
       if (event.isEnded || (event.currentTime >= event.duration && event.duration > 0 && event.isPlaying)) {
@@ -152,6 +213,15 @@ export default function App() {
   // Play a specific track (with LRCLIB synced lyrics auto-fetch)
   const handlePlayTrack = useCallback(
     (track: Track, startTime = 0) => {
+      // Offline Restriction: Only downloaded songs can be played when offline
+      if (isDeviceOffline && !offlineStorage.isTrackDownloaded(track.id)) {
+        setOfflineNotice('You are offline. Only downloaded music can be played.');
+        setTimeout(() => {
+          if (!isDeviceOffline) setOfflineNotice(null);
+        }, 3500);
+        return;
+      }
+
       setCurrentTrack(track);
       mlService.recordPlay(track);
       historyStorage.addToHistory(track);
@@ -174,11 +244,10 @@ export default function App() {
         });
       }
 
-      // Play through audio engine (with offline synthesizer fallback if offline)
-      const forceOfflineSynth = isOffline && !offlineStorage.isTrackDownloaded(track.id);
-      audioEngine.playTrack(track, startTime, forceOfflineSynth);
+      // Play through audio engine
+      audioEngine.playTrack(track, startTime);
     },
-    [isOffline]
+    [isDeviceOffline]
   );
 
   // Handle Spotify Fast Sync completion
@@ -309,7 +378,7 @@ export default function App() {
 
   const handleToggleOfflineMode = () => {
     const active = offlineStorage.toggleSimulatedOffline();
-    setIsOffline(active);
+    setIsDeviceOffline(active);
   };
 
   // Regenerate Daily Mix
@@ -399,6 +468,30 @@ export default function App() {
         userProfile={userProfile}
       />
 
+      {/* Top Automatic Offline Alert Bar */}
+      {isDeviceOffline && (
+        <div className="w-full bg-gradient-to-r from-amber-600/30 via-red-600/20 to-amber-600/30 border-b border-amber-500/40 px-4 py-2.5 flex items-center justify-between text-xs text-amber-200 z-30 select-none animate-fadeIn flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <WifiOff className="w-4 h-4 text-amber-400 animate-pulse flex-shrink-0" />
+            <span className="font-medium">
+              <strong>You are offline.</strong> Only downloaded music can be played without internet.
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedPlaylist(downloadedPlaylist)}
+            className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 font-bold text-xs hover:bg-amber-300 transition-all cursor-pointer shadow-md flex-shrink-0 ml-2"
+          >
+            Play Downloaded ({downloadedTrackIds.length})
+          </button>
+        </div>
+      )}
+
+      {offlineNotice && (
+        <div className="w-full bg-rose-500/20 border-b border-rose-500/30 px-4 py-2 flex items-center justify-center text-xs text-rose-200 z-30 animate-fadeIn flex-shrink-0">
+          <span>{offlineNotice}</span>
+        </div>
+      )}
+
       {/* Main Expansive Scrollable Stage */}
       <main className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 pt-4 sm:pt-6 pb-44">
           {selectedPlaylist ? (
@@ -407,9 +500,40 @@ export default function App() {
               tracks={tracks}
               currentTrackId={currentTrack?.id || null}
               isPlaying={isPlaying}
-              onBack={() => setSelectedPlaylist(null)}
-              onPlayTrack={handlePlayTrack}
-              onPlayAll={handlePlayAll}
+              onBack={() => {
+                setSelectedPlaylist(null);
+                if (activeTab === 'favorites') setActiveTab('library');
+              }}
+              onPlayTrack={(track) => {
+                setPlayingPlaylist(selectedPlaylist);
+                handlePlayTrack(track);
+              }}
+              onPlayAll={(tracklist, shuffle) => {
+                setPlayingPlaylist(selectedPlaylist);
+                handlePlayAll(tracklist, shuffle);
+              }}
+              onToggleLike={handleToggleLike}
+              onDownloadTrack={handleDownloadTrack}
+              onSharePlaylist={handleOpenSharePlaylist}
+              onShareTrack={handleOpenShareTrack}
+              isFavorite={isFavorite}
+              isDownloaded={isDownloaded}
+            />
+          ) : activeTab === 'favorites' ? (
+            <PlaylistDetailView
+              playlist={likedPlaylist}
+              tracks={tracks}
+              currentTrackId={currentTrack?.id || null}
+              isPlaying={isPlaying}
+              onBack={() => setActiveTab('library')}
+              onPlayTrack={(track) => {
+                setPlayingPlaylist(likedPlaylist);
+                handlePlayTrack(track);
+              }}
+              onPlayAll={(tracklist, shuffle) => {
+                setPlayingPlaylist(likedPlaylist);
+                handlePlayAll(tracklist, shuffle);
+              }}
               onToggleLike={handleToggleLike}
               onDownloadTrack={handleDownloadTrack}
               onSharePlaylist={handleOpenSharePlaylist}
@@ -480,25 +604,9 @@ export default function App() {
               isPlaying={isPlaying}
               onPlayTrack={handlePlayTrack}
             />
-          ) : activeTab === 'offline-vault' ? (
-            <OfflineVaultView
-              tracks={tracks}
-              downloadedTrackIds={downloadedTrackIds}
-              stats={storageStats}
-              isOffline={isOffline}
-              onToggleOffline={handleToggleOfflineMode}
-              currentTrackId={currentTrack?.id || null}
-              isPlaying={isPlaying}
-              onPlayTrack={handlePlayTrack}
-              onRemoveOfflineTrack={handleRemoveOfflineTrack}
-              onDownloadAll={handleDownloadAll}
-              onToggleLike={handleToggleLike}
-              onShareTrack={handleOpenShareTrack}
-              isFavorite={isFavorite}
-            />
           ) : (
             <LibraryView
-              viewMode={activeTab === 'favorites' ? 'favorites' : 'library'}
+              viewMode="library"
               playlists={playlists}
               tracks={tracks}
               favoriteTrackIds={favoriteTrackIds}
@@ -513,56 +621,52 @@ export default function App() {
               onDownloadTrack={(track) => handleDownloadTrack(track)}
               isDownloaded={(trackId) => isDownloaded(trackId)}
               onDownloadAll={handleDownloadAll}
-              onOpenOfflineVault={() => {
-                setActiveTab('offline-vault');
-                setSelectedPlaylist(null);
-              }}
               onOpenFavorites={() => {
                 setActiveTab('favorites');
                 setSelectedPlaylist(null);
               }}
             />
           )}
-        </main>
+      </main>
 
-        {/* Floating Bottom Navigation Dock (Matching video navigation structure & tab states) */}
-        <BottomNavDock
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab);
-            setSelectedPlaylist(null);
-          }}
-          onOpenMenuPopup={() => setIsBottomMenuOpen((prev) => !prev)}
-          isMenuOpen={isBottomMenuOpen}
-          offlineCount={downloadedTrackIds.length}
-        />
+      {/* Floating Bottom Navigation Dock (Matching video navigation structure & tab states) */}
+      <BottomNavDock
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setSelectedPlaylist(null);
+        }}
+        onOpenMenuPopup={() => setIsBottomMenuOpen((prev) => !prev)}
+        isMenuOpen={isBottomMenuOpen}
+        offlineCount={downloadedTrackIds.length}
+      />
 
-        {/* Bottom Pop-up Menu Drawer */}
-        <BottomMenuPopup
-          isOpen={isBottomMenuOpen}
-          onClose={() => setIsBottomMenuOpen(false)}
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab);
-            setSelectedPlaylist(null);
-          }}
-          playlists={playlists}
-          onSelectPlaylist={(p) => {
-            setSelectedPlaylist(p);
-          }}
-          selectedPlaylistId={selectedPlaylist?.id || null}
-          offlineCount={downloadedTrackIds.length}
-          onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
-          storageStats={storageStats}
-          onOpenSpotifySync={() => setIsSpotifySyncOpen(true)}
-          onOpenOwnerPortal={() => setIsOwnerPortalOpen(true)}
-          onOpenEqualizer={() => setIsEqualizerOpen(true)}
-          onOpenApkModal={() => setIsApkModalOpen(true)}
-          onOpenGoogleAuth={() => setIsGoogleAuthOpen(true)}
-          userProfile={userProfile}
-        />
+      {/* Bottom Pop-up Menu Drawer */}
+      <BottomMenuPopup
+        isOpen={isBottomMenuOpen}
+        onClose={() => setIsBottomMenuOpen(false)}
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setSelectedPlaylist(null);
+        }}
+        playlists={playlists}
+        onSelectPlaylist={(p) => {
+          setSelectedPlaylist(p);
+        }}
+        selectedPlaylistId={selectedPlaylist?.id || null}
+        offlineCount={downloadedTrackIds.length}
+        onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
+        storageStats={storageStats}
+        onOpenSpotifySync={() => setIsSpotifySyncOpen(true)}
+        onOpenOwnerPortal={() => setIsOwnerPortalOpen(true)}
+        onOpenEqualizer={() => setIsEqualizerOpen(true)}
+        onOpenApkModal={() => setIsApkModalOpen(true)}
+        onOpenGoogleAuth={() => setIsGoogleAuthOpen(true)}
+        userProfile={userProfile}
+      />
 
-        {/* Docked Player Bar (Bottom) */}
+      {/* Docked Player Bar (Bottom) */}
       <PlayerBar
         currentTrack={currentTrack}
         isPlaying={isPlaying}
@@ -577,6 +681,8 @@ export default function App() {
         isDownloaded={currentTrack ? isDownloaded(currentTrack.id) : false}
         isDownloading={downloadingTrackId === currentTrack?.id}
         isSynthesizedFallback={isSynthesizedFallback}
+        playingPlaylist={playingPlaylist}
+        onOpenPlayingPlaylist={(p) => setSelectedPlaylist(p)}
         onTogglePlay={handleTogglePlay}
         onPrevious={handlePrevious}
         onNext={handleNext}
@@ -617,9 +723,19 @@ export default function App() {
         onShareTrack={() => currentTrack && handleOpenShareTrack(currentTrack)}
         equalizer={equalizer}
         onEqualizerChange={handleEqualizerChange}
+        onOpenEqualizer={() => setIsEqualizerOpen(true)}
         onDownloadTrack={() => currentTrack && handleDownloadTrack(currentTrack)}
         isDownloaded={currentTrack ? isDownloaded(currentTrack.id) : false}
         isDownloading={downloadingTrackId === currentTrack?.id}
+        sleepTimerRemainingSec={sleepTimerRemainingSec}
+        sleepTimerMinutes={sleepTimerMinutes}
+        onSetSleepTimer={(mins) => audioEngine.setSleepTimer(mins)}
+        activePlaylist={playingPlaylist}
+        onOpenPlaylist={(p) => {
+          setSelectedPlaylist(p);
+          setIsImmersiveOpen(false);
+        }}
+        onAddToPlaylist={() => setIsCreatePlaylistOpen(true)}
       />
 
       {/* Social Share Modal */}

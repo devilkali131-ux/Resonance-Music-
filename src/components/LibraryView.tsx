@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Heart,
   CheckCircle2,
@@ -35,7 +35,6 @@ interface LibraryViewProps {
   onDownloadTrack?: (track: Track) => void;
   isDownloaded?: (trackId: string) => boolean;
   onDownloadAll?: () => void;
-  onOpenOfflineVault?: () => void;
   onOpenFavorites?: () => void;
   onRequireLogin?: () => void;
 }
@@ -43,6 +42,7 @@ interface LibraryViewProps {
 type LibraryFilter = 'Playlists' | 'Songs' | 'Albums' | 'Artists' | 'Local';
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
+  viewMode = 'library',
   playlists,
   tracks,
   favoriteTrackIds,
@@ -56,7 +56,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onDownloadTrack,
   isDownloaded = () => false,
   onDownloadAll,
-  onOpenOfflineVault,
   onOpenFavorites,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<LibraryFilter>('Playlists');
@@ -70,34 +69,44 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const FILTERS: LibraryFilter[] = ['Playlists', 'Songs', 'Albums', 'Artists', 'Local'];
 
-  // Handle Downloaded card click - Seamlessly open offline vault
-  const handleDownloadedClick = () => {
-    if (onOpenOfflineVault) {
-      onOpenOfflineVault();
-    } else {
-      setSelectedFilter('Songs');
-    }
+  const handleLikedClick = () => {
+    const likedPlaylist: Playlist = {
+      id: 'favorites-playlist',
+      name: 'Liked Songs',
+      description: 'Your collection of loved and favorited tracks.',
+      tagline: 'Favorites',
+      accentColor: '#ec4899',
+      coverGradient: 'linear-gradient(135deg, #831843 0%, #be185d 50%, #ec4899 100%)',
+      trackIds: favoriteTrackIds,
+      isAiGenerated: false,
+      createdAt: 'Favorites',
+      playCount: favoriteTrackIds.length,
+    };
+    onSelectPlaylist(likedPlaylist);
   };
 
-  const handleLikedClick = () => {
-    if (onOpenFavorites) {
-      onOpenFavorites();
-    } else {
-      const likedPlaylist: Playlist = {
-        id: 'favorites-playlist',
-        name: 'Liked Songs',
-        description: 'Your collection of loved and favorited tracks.',
-        tagline: 'Favorites',
-        accentColor: '#ec4899',
-        coverGradient: 'linear-gradient(135deg, #831843 0%, #be185d 50%, #ec4899 100%)',
-        trackIds: favoriteTrackIds,
-        isAiGenerated: false,
-        createdAt: 'Favorites',
-        playCount: favoriteTrackIds.length,
-      };
-      onSelectPlaylist(likedPlaylist);
-    }
+  // Handle Downloaded card click - Seamlessly open downloaded playlist
+  const handleDownloadedClick = () => {
+    const downloadedPlaylist: Playlist = {
+      id: 'downloaded-playlist',
+      name: 'Downloaded Music',
+      description: 'Songs saved offline to your device for playback without internet.',
+      tagline: 'Offline Available',
+      accentColor: '#10b981',
+      coverGradient: 'linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)',
+      trackIds: downloadedTrackIds,
+      isAiGenerated: false,
+      createdAt: 'Offline Cache',
+      playCount: downloadedTrackIds.length,
+    };
+    onSelectPlaylist(downloadedPlaylist);
   };
+
+  useEffect(() => {
+    if (viewMode === 'favorites') {
+      handleLikedClick();
+    }
+  }, [viewMode]);
 
   // 8 Grid Shortcut Cards matching user screenshot
   const gridCards = [

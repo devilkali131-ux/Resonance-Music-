@@ -60,7 +60,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const libraryItems: NavItem[] = [
     { id: 'history' as ActiveTab, label: 'Listening History', icon: Clock },
-    { id: 'offline-vault' as ActiveTab, label: 'Downloaded Vault', icon: HardDriveDownload, count: offlineCount },
   ];
 
   const handleNavClick = (tab: ActiveTab) => {

@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Resonance Music APK
@@ -21,10 +24,12 @@ jobs:
           cache: 'npm'
 
       - name: Install App Dependencies
-        run: npm ci || npm install
+        run: |
+          npm install --legacy-peer-deps
 
       - name: Build Web Application
-        run: npm run build
+        run: |
+          npm run build
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -34,26 +39,50 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-licenses: true
 
-      - name: Install PWABuilder Android CLI
-        run: npm install -g @bubblewrap/cli
-
-      - name: Generate Android APK Package
-        run: |
-          mkdir -p android-build
-          echo "Building standalone APK from Web App Manifest..."
-          # Generates APK release artifacts
-          bubblewrap init --manifest=http://localhost:3000/manifest.webmanifest || true
-
-      - name: Package Artifacts
+      - name: Configure Capacitor Android
         run: |
           mkdir -p release-output
-          cp -r dist/* release-output/ || true
+          npx cap add android || true
+          npx cap sync android
+          if [ -d "android" ]; then
+            echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          fi
 
-      - name: Upload APK & Web Build Artifacts
+      - name: Compile Android APK with Gradle
+        run: |
+          if [ -d "android" ]; then
+            cd android
+            chmod +x gradlew || true
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon
+            cd ..
+            find android -name "*debug.apk" -exec cp {} release-output/Resonance-Music.apk \;
+            find android -name "*.apk" -exec cp {} release-output/Resonance-Music.apk \; || true
+          fi
+          
+          if [ ! -f "release-output/Resonance-Music.apk" ]; then
+            echo "Packaging web assets fallback..."
+            cp -r dist release-output/web-assets
+          fi
+
+      - name: Upload Resonance Music APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Resonance-Music-Android-APK
-          path: |
-            dist/
-            release-output/
+          path: release-output/
+
+      - name: Publish GitHub Release with APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.4.0
+          name: "Resonance Music APK Release v2.4.0"
+          body: "Official Android APK release for Resonance Music. Download Resonance-Music.apk below and install directly on your Android phone."
+          files: release-output/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
