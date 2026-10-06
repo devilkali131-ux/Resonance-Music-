@@ -1,32 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  X,
   ChevronDown,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Shuffle,
-  Repeat,
   Heart,
   Sliders,
-  Sparkles,
-  Music,
   Share2,
   FileText,
-  Disc3,
-  Columns,
-  Maximize2,
+  Download,
+  CheckCircle2,
+  Shuffle,
+  Repeat,
+  Moon,
+  ListMusic,
+  MoreVertical,
+  X,
   Volume2,
-  Activity,
-  RotateCcw,
+  Clock,
+  Music,
+  Check,
 } from 'lucide-react';
 import { EqualizerState, Track } from '../types/music';
 import { AmbientArtGlow } from './AmbientArtGlow';
-import { RealtimeVisualizer } from './RealtimeVisualizer';
 import { extractDominantPalette, TrackPalette } from '../utils/colorExtractor';
-
-export type PlayerViewMode = 'lyrics-only' | 'artwork-only' | 'split';
 
 interface ImmersivePlayerModalProps {
   isOpen: boolean;
@@ -49,15 +43,10 @@ interface ImmersivePlayerModalProps {
   equalizer: EqualizerState;
   onEqualizerChange: (eq: EqualizerState) => void;
   onOpenEqualizer?: () => void;
+  onDownloadTrack?: () => void;
+  isDownloaded?: boolean;
+  isDownloading?: boolean;
 }
-
-const EQ_PRESETS: { name: string; eq: EqualizerState }[] = [
-  { name: 'Flat', eq: { bass: 0, mid: 0, treble: 0, surround: false } },
-  { name: 'Bass Boost', eq: { bass: 8, mid: 1, treble: 2, surround: false } },
-  { name: 'Club EDM', eq: { bass: 7, mid: -1, treble: 5, surround: true } },
-  { name: 'Vocal Clarity', eq: { bass: -2, mid: 6, treble: 3, surround: false } },
-  { name: '3D Ambient', eq: { bass: 3, mid: -2, treble: 4, surround: true } },
-];
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -87,19 +76,20 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
   equalizer,
   onEqualizerChange,
   onOpenEqualizer,
+  onDownloadTrack,
+  isDownloaded = false,
+  isDownloading = false,
 }) => {
-  // View mode: 'lyrics-only' | 'artwork-only' | 'split'
-  const [viewMode, setViewMode] = useState<PlayerViewMode>('split');
-  const [activeTabInSplit, setActiveTabInSplit] = useState<'lyrics' | 'equalizer' | 'details'>('lyrics');
-  const [showPlainLyrics, setShowPlainLyrics] = useState(false);
-  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const [userScrolledAway, setUserScrolledAway] = useState(false);
-  const fullLyricsContainerRef = useRef<HTMLDivElement | null>(null);
-  const splitLyricsContainerRef = useRef<HTMLDivElement | null>(null);
-  const lastScrolledIdxRef = useRef<number>(-1);
-  const userScrollTimerRef = useRef<any>(null);
   const [ambientPalette, setAmbientPalette] = useState<TrackPalette | null>(null);
+  const [showLyricsDrawer, setShowLyricsDrawer] = useState(false);
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  const [sleepTimerRemainingSec, setSleepTimerRemainingSec] = useState<number | null>(null);
 
+  const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Extract atmospheric palette from track artwork
   useEffect(() => {
     if (track) {
       extractDominantPalette(track.coverUrl, track.accentColor).then((p) => {
@@ -108,22 +98,38 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
     }
   }, [track]);
 
-  // Adjust default viewMode based on screen width on initial open
+  // Handle sleep timer countdown
   useEffect(() => {
-    if (isOpen) {
-      if (window.innerWidth < 768) {
-        // Mobile starts in artwork or lyrics view
-        setViewMode('artwork-only');
-      } else {
-        setViewMode('split');
+    if (sleepTimerRemainingSec === null) return;
+    if (sleepTimerRemainingSec <= 0) {
+      if (isPlaying) {
+        onTogglePlay();
       }
+      setSleepTimerMinutes(null);
+      setSleepTimerRemainingSec(null);
+      return;
     }
-  }, [isOpen]);
 
-  // Calculate current active lyric index with highest accuracy
+    const interval = setInterval(() => {
+      setSleepTimerRemainingSec((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sleepTimerRemainingSec, isPlaying, onTogglePlay]);
+
+  const setSleepTimer = (minutes: number | null) => {
+    setSleepTimerMinutes(minutes);
+    if (minutes === null) {
+      setSleepTimerRemainingSec(null);
+    } else {
+      setSleepTimerRemainingSec(minutes * 60);
+    }
+    setShowSleepTimerModal(false);
+  };
+
+  // Calculate current active lyric index
   const currentLyricIdx = useMemo(() => {
     if (!track?.lyrics || track.lyrics.length === 0) return -1;
-    // If before first lyric timestamp
     if (currentTime < track.lyrics[0].time) return -1;
     for (let i = track.lyrics.length - 1; i >= 0; i--) {
       if (currentTime >= track.lyrics[i].time) {
@@ -133,725 +139,171 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
     return -1;
   }, [track?.lyrics, currentTime]);
 
-  // Smooth centering auto-scroll to the active line
-  const scrollToActiveLine = useCallback(
-    (idx: number, smooth: boolean = true) => {
-      if (idx < 0) return;
-      const container =
-        viewMode === 'lyrics-only'
-          ? fullLyricsContainerRef.current
-          : viewMode === 'split' && activeTabInSplit === 'lyrics'
-          ? splitLyricsContainerRef.current
-          : null;
-
-      if (!container) return;
-
-      const activeEl = container.querySelector(
-        `[data-lyric-idx="${idx}"]`
-      ) as HTMLElement | null;
-
-      if (activeEl) {
-        const containerHeight = container.clientHeight;
-        const elOffsetTop = activeEl.offsetTop;
-        const elHeight = activeEl.clientHeight;
-        const targetTop = elOffsetTop - containerHeight / 2 + elHeight / 2;
-
-        container.scrollTo({
-          top: Math.max(0, targetTop),
-          behavior: smooth ? 'smooth' : 'auto',
-        });
-        lastScrolledIdxRef.current = idx;
-        setUserScrolledAway(false);
-      }
-    },
-    [viewMode, activeTabInSplit]
-  );
-
-  // Auto-scroll when the active lyric index changes
+  // Auto-scroll lyrics to active line
   useEffect(() => {
-    if (!isAutoScrollEnabled || userScrolledAway) return;
-    if (
-      currentLyricIdx !== -1 &&
-      currentLyricIdx !== lastScrolledIdxRef.current
-    ) {
-      scrollToActiveLine(currentLyricIdx, true);
+    if (!showLyricsDrawer || currentLyricIdx < 0 || !lyricsContainerRef.current) return;
+    const activeEl = lyricsContainerRef.current.querySelector(
+      `[data-lyric-idx="${currentLyricIdx}"]`
+    );
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [currentLyricIdx, isAutoScrollEnabled, userScrolledAway, scrollToActiveLine]);
-
-  // Immediately center active line when switching views or tabs
-  useEffect(() => {
-    if (isAutoScrollEnabled && currentLyricIdx !== -1) {
-      const timer = setTimeout(() => {
-        scrollToActiveLine(currentLyricIdx, false);
-      }, 60);
-      return () => clearTimeout(timer);
-    }
-  }, [viewMode, activeTabInSplit, isAutoScrollEnabled, scrollToActiveLine, currentLyricIdx]);
-
-  // Handle user manual scroll: temporarily pause auto-scroll if user scrolled far from active
-  const handleUserScroll = useCallback(() => {
-    // If user scrolled, we pause auto-scroll briefly so it doesn't interrupt reading
-    setUserScrolledAway(true);
-    if (userScrollTimerRef.current) {
-      clearTimeout(userScrollTimerRef.current);
-    }
-    // Resume auto-scroll automatically after 4.5 seconds of inactivity
-    userScrollTimerRef.current = setTimeout(() => {
-      setUserScrolledAway(false);
-      if (currentLyricIdx !== -1) {
-        scrollToActiveLine(currentLyricIdx, true);
-      }
-    }, 4500);
-  }, [currentLyricIdx, scrollToActiveLine]);
+  }, [currentLyricIdx, showLyricsDrawer]);
 
   if (!isOpen || !track) return null;
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const primaryAccent = ambientPalette?.primary || track.accentColor || '#00f0ff';
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+  const primaryAccent = ambientPalette?.primary || track.accentColor || '#e11d48';
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#07080d] flex flex-col select-none overflow-hidden animate-fadeIn h-[100dvh] w-screen">
-      {/* Dynamic Ambient Background Glow from Artwork Dominant Colors (Liquid Glass deep blur) */}
-      <div
-        className="absolute inset-0 opacity-30 blur-3xl pointer-events-none transition-all duration-1000 scale-125"
-        style={{
-          background: ambientPalette
-            ? `radial-gradient(circle at 50% 30%, ${ambientPalette.primary} 0%, ${ambientPalette.secondary} 40%, transparent 75%)`
-            : `radial-gradient(circle at 50% 30%, ${primaryAccent} 0%, transparent 70%)`,
-        }}
-      />
-      <div
-        className={`absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl pointer-events-none transition-all duration-1000 ${
-          isPlaying ? 'opacity-25 animate-pulse' : 'opacity-10'
-        }`}
-        style={{
-          background: ambientPalette?.secondary || '#8b5cf6',
-        }}
-      />
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-between overflow-hidden select-none animate-fadeIn transition-colors duration-700"
+      style={{
+        backgroundColor: ambientPalette?.rgbPrimary
+          ? `rgb(${Math.round(ambientPalette.rgbPrimary[0] * 0.12)}, ${Math.round(
+              ambientPalette.rgbPrimary[1] * 0.12
+            )}, ${Math.round(ambientPalette.rgbPrimary[2] * 0.12)})`
+          : '#1c1219',
+        backgroundImage: `radial-gradient(circle at 50% 25%, ${
+          ambientPalette?.primary ? `${ambientPalette.primary}22` : 'rgba(150, 30, 60, 0.15)'
+        } 0%, transparent 65%)`,
+      }}
+    >
+      {/* ------------------------------------------------------------- */}
+      {/* TOP HEADER: Centered "Now Playing" and Mix Title              */}
+      {/* ------------------------------------------------------------- */}
+      <header className="relative flex items-center justify-between px-5 sm:px-8 pt-4 pb-2 z-20 w-full">
+        {/* Minimize Button (Left) */}
+        <button
+          onClick={onClose}
+          className="p-2 -ml-2 text-white/70 hover:text-white transition-all cursor-pointer active:scale-95"
+          title="Minimize player"
+        >
+          <ChevronDown className="w-6 h-6 stroke-[2.2]" />
+        </button>
 
-      {/* Top Mobile Pull Handle - Swipe down or tap to close */}
-      <div
-        onClick={onClose}
-        className="w-full flex justify-center pt-2 pb-1 cursor-pointer sm:hidden z-40 relative group"
-        title="Tap to minimize player"
-      >
-        <div className="w-12 h-1.5 rounded-full bg-white/30 group-hover:bg-white/60 transition-colors" />
-      </div>
-
-      {/* FIXED CLOSE BUTTON (Top-Right) - Guaranteed visible on all mobile and desktop screens */}
-      <button
-        onClick={onClose}
-        aria-label="Close Player"
-        title="Close Player"
-        className="fixed top-3 right-3 sm:top-5 sm:right-6 z-50 flex items-center justify-center w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 active:scale-95 text-white/80 hover:text-white border border-white/20 backdrop-blur-2xl shadow-2xl transition-all"
-      >
-        <X className="w-5 h-5" />
-      </button>
-
-      {/* Top Left Minimize Chevron Button (Mobile Friendly) */}
-      <button
-        onClick={onClose}
-        aria-label="Minimize Player"
-        title="Minimize Player"
-        className="fixed top-3 left-3 sm:top-5 sm:left-6 z-50 flex items-center justify-center w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 active:scale-95 text-white/80 hover:text-white border border-white/20 backdrop-blur-2xl shadow-2xl transition-all sm:hidden"
-      >
-        <ChevronDown className="w-5 h-5" />
-      </button>
-
-      {/* Top Header Bar */}
-      <header className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-3 sm:py-4 border-b border-white/[0.08] backdrop-blur-xl">
-        <div className="flex items-center gap-2.5 min-w-0 pr-12 sm:pr-0">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
-            <Music className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="truncate">
-            <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-widest text-slate-400 block truncate">
-              Resonance Music Immersive
-            </span>
-            <span className="text-xs sm:text-sm font-semibold text-white truncate block">
-              {track.album || track.title}
-            </span>
-          </div>
+        {/* Centered Track Context */}
+        <div className="text-center absolute left-1/2 -translate-x-1/2 pointer-events-none max-w-[220px] sm:max-w-xs">
+          <p className="text-[11px] sm:text-xs text-white/60 font-medium tracking-wide">
+            Now Playing
+          </p>
+          <p className="text-xs sm:text-sm font-bold text-white/95 truncate mt-0.5">
+            {track.album ? `${track.album}` : `${track.title} Mix`}
+          </p>
         </div>
 
-        {/* View Mode Toggle: [Artwork Only] | [Lyrics Only] | [Split View] | [Audio EQ] */}
-        <div className="hidden sm:flex items-center gap-1 p-1 bg-black/40 rounded-2xl border border-white/[0.1] backdrop-blur-2xl mr-12">
-          <button
-            onClick={() => setViewMode('artwork-only')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              viewMode === 'artwork-only'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Disc3 className="w-3.5 h-3.5" />
-            <span>Artwork</span>
-          </button>
-
-          <button
-            onClick={() => setViewMode('lyrics-only')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              viewMode === 'lyrics-only'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Lyrics Only</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setViewMode('split');
-              setActiveTabInSplit('lyrics');
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              viewMode === 'split' && activeTabInSplit === 'lyrics'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/25'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Columns className="w-3.5 h-3.5" />
-            <span>Split View</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (onOpenEqualizer) {
-                onOpenEqualizer();
-              } else {
-                setViewMode('split');
-                setActiveTabInSplit('equalizer');
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-slate-400 hover:text-white cursor-pointer"
-            title="Open Audio Equalizer Pop-up"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Audio EQ</span>
-          </button>
-        </div>
+        {/* Top Right Quick Share */}
+        <button
+          onClick={onShareTrack}
+          className="p-2 -mr-2 text-white/70 hover:text-white transition-all cursor-pointer active:scale-95"
+          title="Share song"
+        >
+          <Share2 className="w-5 h-5" />
+        </button>
       </header>
 
-      {/* Mobile-Only Mode Switcher Bar */}
-      <div className="flex sm:hidden items-center justify-center gap-1.5 px-4 py-2 border-b border-white/[0.06] bg-black/20 z-10">
-        <button
-          onClick={() => setViewMode('artwork-only')}
-          className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
-            viewMode === 'artwork-only'
-              ? 'bg-cyan-400 text-slate-950 shadow-sm'
-              : 'bg-white/[0.04] text-slate-400'
-          }`}
-        >
-          💿 Artwork
-        </button>
-        <button
-          onClick={() => setViewMode('lyrics-only')}
-          className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
-            viewMode === 'lyrics-only'
-              ? 'bg-cyan-400 text-slate-950 shadow-sm'
-              : 'bg-white/[0.04] text-slate-400'
-          }`}
-        >
-          🎤 Lyrics Only
-        </button>
-        <button
-          onClick={() => {
-            if (onOpenEqualizer) {
-              onOpenEqualizer();
-            } else {
-              setViewMode('split');
-              setActiveTabInSplit('equalizer');
-            }
-          }}
-          className="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all text-center bg-white/[0.04] text-slate-300 hover:text-white cursor-pointer"
-          title="Open Audio Equalizer Pop-up"
-        >
-          🎛️ Equalizer
-        </button>
-      </div>
-
-      {/* ================================================================= */}
-      {/* MAIN VIEWPORT: SWITCHES BETWEEN LYRICS-ONLY, ARTWORK-ONLY, & SPLIT */}
-      {/* ================================================================= */}
-      <main className="relative z-10 flex-1 flex flex-col overflow-hidden max-w-6xl mx-auto w-full px-4 sm:px-8 py-3 sm:py-6">
-        {/* ------------------------------------------------------------- */}
-        {/* MODE 1: LYRICS ONLY (Full-Screen Immersive Karaoke Lyrics)    */}
-        {/* ------------------------------------------------------------- */}
-        {viewMode === 'lyrics-only' && (
-          <div className="flex-1 flex flex-col h-full overflow-hidden animate-fadeIn">
-            {/* Header pill with track summary & quick switch to artwork */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={track.coverUrl}
-                  alt={track.title}
-                  className="w-10 h-10 rounded-xl object-cover border border-white/[0.1] shadow-md"
-                />
-                <div>
-                  <h4 className="text-sm font-bold text-white leading-tight">{track.title}</h4>
-                  <p className="text-xs text-slate-400">{track.artist}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Auto-Scroll Toggle Button */}
-                <button
-                  onClick={() => {
-                    const nextState = !isAutoScrollEnabled;
-                    setIsAutoScrollEnabled(nextState);
-                    if (nextState && currentLyricIdx !== -1) {
-                      scrollToActiveLine(currentLyricIdx, true);
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-all border cursor-pointer ${
-                    isAutoScrollEnabled
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-sm'
-                      : 'bg-white/[0.05] text-slate-400 border-white/[0.08]'
-                  }`}
-                  title="Toggle Lyrics Auto-Scroll"
-                >
-                  <Activity className={`w-3.5 h-3.5 ${isAutoScrollEnabled ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span>{isAutoScrollEnabled ? 'Auto-Scroll ON' : 'Auto-Scroll OFF'}</span>
-                </button>
-
-                {track.plainLyrics && (
-                  <button
-                    onClick={() => setShowPlainLyrics(!showPlainLyrics)}
-                    className="px-2.5 py-1 text-xs rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 border border-white/[0.08] transition-all cursor-pointer"
-                  >
-                    {showPlainLyrics ? 'Synced' : 'Plain'}
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setViewMode('artwork-only')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 transition-all cursor-pointer"
-                >
-                  <Disc3 className="w-3.5 h-3.5" />
-                  <span>Show Artwork</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Resume Auto-scroll Floating Pill if user scrolled away */}
-            {userScrolledAway && isAutoScrollEnabled && currentLyricIdx !== -1 && (
-              <div className="flex justify-center pb-2">
-                <button
-                  onClick={() => {
-                    setUserScrolledAway(false);
-                    if (currentLyricIdx !== -1) {
-                      scrollToActiveLine(currentLyricIdx, true);
-                    }
-                  }}
-                  className="px-3.5 py-1.5 rounded-full bg-cyan-400 text-slate-950 font-bold text-xs shadow-xl shadow-cyan-500/30 flex items-center gap-1.5 hover:bg-cyan-300 transition-all cursor-pointer animate-fadeIn"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Resume Auto-Scroll</span>
-                </button>
-              </div>
-            )}
-
-            {/* Lyrics Container */}
-            <div
-              ref={fullLyricsContainerRef}
-              onScroll={handleUserScroll}
-              className="flex-1 overflow-y-auto px-3 sm:px-12 py-10 space-y-6 text-center scrollbar-none scroll-smooth"
-            >
-              {showPlainLyrics && track.plainLyrics ? (
-                <div className="max-w-2xl mx-auto whitespace-pre-line text-slate-300 text-sm sm:text-base leading-relaxed py-4">
-                  {track.plainLyrics}
-                </div>
-              ) : track.lyrics && track.lyrics.length > 0 ? (
-                track.lyrics.map((line, idx) => {
-                  const isActive = idx === currentLyricIdx;
-                  const isPast = idx < currentLyricIdx;
-                  const isFuture = idx > currentLyricIdx;
-
-                  return (
-                    <div
-                      key={idx}
-                      data-lyric-idx={idx}
-                      data-active={isActive ? 'true' : undefined}
-                      onClick={() => {
-                        onSeek(line.time);
-                        scrollToActiveLine(idx, true);
-                      }}
-                      className={`group cursor-pointer transition-all duration-300 py-3 sm:py-4 px-4 sm:px-8 rounded-2xl relative select-none ${
-                        isActive
-                          ? 'bg-gradient-to-r from-cyan-500/20 via-cyan-400/15 to-indigo-500/20 border border-cyan-400/40 shadow-2xl shadow-cyan-500/30 scale-105 sm:scale-110'
-                          : isPast
-                          ? 'opacity-60 hover:opacity-100 hover:bg-white/[0.04]'
-                          : 'opacity-35 hover:opacity-85 hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-2.5">
-                        {isActive && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 ring-4 ring-cyan-400/30 animate-pulse flex-shrink-0" />
-                        )}
-                        <p
-                          className={`font-black tracking-tight leading-relaxed transition-all duration-300 ${
-                            isActive
-                              ? 'text-white text-xl sm:text-3xl drop-shadow-[0_0_25px_rgba(0,240,255,0.7)]'
-                              : isPast
-                              ? 'text-slate-300 text-sm sm:text-xl font-semibold'
-                              : 'text-slate-400 text-xs sm:text-lg font-medium'
-                          }`}
-                        >
-                          {line.text}
-                        </p>
-                      </div>
-
-                      {/* Jump to time indicator on hover */}
-                      <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-cyan-300/80 block mt-1">
-                        ▶ Jump to {Math.floor(line.time / 60)}:{(line.time % 60).toString().padStart(2, '0')}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
-                  <FileText className="w-8 h-8 text-slate-500" />
-                  <p className="text-sm">Instrumental or live lyrics unavailable for this track</p>
-                  <button
-                    onClick={() => setViewMode('artwork-only')}
-                    className="px-4 py-2 mt-2 rounded-xl bg-cyan-500 text-slate-950 font-semibold text-xs"
-                  >
-                    Switch to Artwork View
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* MODE 2: ARTWORK ONLY (Giant Album Art, Glow & Visualizer)     */}
-        {/* ------------------------------------------------------------- */}
-        {viewMode === 'artwork-only' && (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-fadeIn py-2">
-            <AmbientArtGlow
-              coverUrl={track.coverUrl}
-              accentColor={primaryAccent}
-              isPlaying={isPlaying}
-              glowIntensity="immersive"
-            >
-              <div className="relative w-64 sm:w-84 md:w-96 aspect-square rounded-3xl overflow-hidden shadow-2xl border border-white/[0.12] group">
-                <img
-                  src={track.coverUrl}
-                  alt={track.title}
-                  className={`w-full h-full object-cover transition-transform duration-1000 ${
-                    isPlaying ? 'scale-105' : 'scale-100'
-                  }`}
-                />
-                <div
-                  className={`absolute inset-0 bg-gradient-to-tr from-cyan-500/20 to-transparent pointer-events-none ${
-                    isPlaying ? 'animate-pulse' : ''
-                  }`}
-                />
-              </div>
-            </AmbientArtGlow>
-
-            {/* Real-time Spectrum Waveform Visualizer under Artwork */}
-            <div className="w-64 sm:w-80 h-10 px-2">
-              <RealtimeVisualizer
-                isPlaying={isPlaying}
-                accentColor={primaryAccent}
-                height={36}
-                interactive={true}
+      {/* ------------------------------------------------------------- */}
+      {/* MAIN BODY: Large Artwork, Track Details, Scrubber & Controls  */}
+      {/* ------------------------------------------------------------- */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-10 max-w-md mx-auto w-full space-y-5 sm:space-y-6 py-2">
+        {/* Large Square Album Artwork */}
+        <div className="w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] aspect-square mx-auto">
+          <AmbientArtGlow
+            coverUrl={track.coverUrl}
+            accentColor={primaryAccent}
+            isPlaying={isPlaying}
+            glowIntensity="immersive"
+          >
+            <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-2xl shadow-black/95 border border-white/10 select-none bg-black/40">
+              <img
+                src={track.coverUrl}
+                alt={track.title}
+                className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
               />
             </div>
+          </AmbientArtGlow>
+        </div>
 
-            {/* Track Info */}
-            <div className="text-center max-w-lg">
-              <h3 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight">
-                {track.title}
-              </h3>
-              <p className="text-sm sm:text-base text-slate-400 mt-1 font-medium">{track.artist}</p>
-              <div className="flex items-center justify-center gap-3 text-xs text-slate-500 mt-2">
-                <span>{track.genre}</span>
-                <span aria-hidden="true">·</span>
-                <span>{track.bpm} BPM</span>
-                <span aria-hidden="true">·</span>
-                <span>Key of {track.key}</span>
-              </div>
-            </div>
+        {/* Track Title, Artist & Squircle Action Buttons (Download + Like) */}
+        <div className="flex items-center justify-between w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] pt-1">
+          {/* Song and Artist Info */}
+          <div className="min-w-0 flex-1 pr-3">
+            <h1 className="text-2xl sm:text-[28px] font-black text-white tracking-tight leading-tight truncate">
+              {track.title}
+            </h1>
+            <p className="text-sm sm:text-base font-normal text-white/60 truncate mt-0.5">
+              {track.artist}
+            </p>
+          </div>
 
-            {/* Quick Switch to Lyrics Button */}
+          {/* Squircle Action Buttons matching screenshot */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            {/* 1. Download Button (White Squircle with Download Icon) */}
+            {onDownloadTrack && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownloadTrack();
+                }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95 ${
+                  isDownloaded
+                    ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
+                    : isDownloading
+                    ? 'bg-white text-black animate-pulse'
+                    : 'bg-white text-black hover:bg-slate-200'
+                }`}
+                title={isDownloaded ? 'Downloaded Offline' : 'Download Song'}
+              >
+                {isDownloading ? (
+                  <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : isDownloaded ? (
+                  <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                ) : (
+                  <Download className="w-5 h-5 stroke-[2.5]" />
+                )}
+              </button>
+            )}
+
+            {/* 2. Heart / Like Button (White Squircle with Heart Icon) */}
             <button
-              onClick={() => setViewMode('lyrics-only')}
-              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/[0.06] hover:bg-cyan-500/20 border border-white/[0.1] text-xs font-semibold text-slate-200 hover:text-cyan-300 transition-all shadow-lg backdrop-blur-xl"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleLike();
+              }}
+              className="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer shadow-lg active:scale-95"
+              title={isLiked ? 'Unlike song' : 'Like song'}
             >
-              <FileText className="w-4 h-4 text-cyan-400" />
-              <span>Show Lyrics Only</span>
+              <Heart
+                className={`w-5 h-5 ${
+                  isLiked
+                    ? 'fill-rose-500 text-rose-500 stroke-rose-500'
+                    : 'text-black stroke-[2.5]'
+                }`}
+              />
             </button>
           </div>
-        )}
+        </div>
 
-        {/* ------------------------------------------------------------- */}
-        {/* MODE 3: SPLIT VIEW (Artwork on left, Lyrics/EQ on right)      */}
-        {/* ------------------------------------------------------------- */}
-        {viewMode === 'split' && (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center overflow-hidden animate-fadeIn">
-            {/* Left: Artwork Presentation */}
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <AmbientArtGlow
-                coverUrl={track.coverUrl}
-                accentColor={primaryAccent}
-                isPlaying={isPlaying}
-                glowIntensity="immersive"
-              >
-                <div className="relative w-56 sm:w-72 md:w-80 aspect-square rounded-3xl overflow-hidden shadow-2xl border border-white/[0.1] group">
-                  <img
-                    src={track.coverUrl}
-                    alt={track.title}
-                    className={`w-full h-full object-cover transition-transform duration-1000 ${
-                      isPlaying ? 'scale-105' : 'scale-100'
-                    }`}
-                  />
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-tr from-cyan-500/20 to-transparent pointer-events-none ${
-                      isPlaying ? 'animate-pulse' : ''
-                    }`}
-                  />
-                </div>
-              </AmbientArtGlow>
-
-              <div className="text-center max-w-md">
-                <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                  {track.title}
-                </h3>
-                <p className="text-sm text-slate-400 mt-1">{track.artist}</p>
-                <div className="flex items-center justify-center gap-3 text-xs text-slate-500 mt-1.5">
-                  <span>{track.genre}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{track.bpm} BPM</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Key of {track.key}</span>
-                </div>
-              </div>
-
-              {/* Toggle to full lyrics button */}
-              <button
-                onClick={() => setViewMode('lyrics-only')}
-                className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Expand Lyrics Full Screen</span>
-              </button>
-            </div>
-
-            {/* Right: Lyrics / EQ / Details Panel */}
-            <div className="h-full flex flex-col justify-center min-h-[340px] max-h-[440px] bg-black/40 border border-white/[0.08] rounded-3xl p-5 backdrop-blur-2xl overflow-hidden">
-              {/* Tab Selector inside Split */}
-              <div className="flex items-center gap-2 pb-3 mb-2 border-b border-white/[0.06]">
-                <button
-                  onClick={() => setActiveTabInSplit('lyrics')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    activeTabInSplit === 'lyrics'
-                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Synced Lyrics
-                </button>
-                <button
-                  onClick={() => setActiveTabInSplit('equalizer')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    activeTabInSplit === 'equalizer'
-                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Audio EQ
-                </button>
-                <button
-                  onClick={() => setActiveTabInSplit('details')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    activeTabInSplit === 'details'
-                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Insights
-                </button>
-              </div>
-
-              {/* Tab Content */}
-              {activeTabInSplit === 'lyrics' && (
-                <div
-                  ref={splitLyricsContainerRef}
-                  onScroll={handleUserScroll}
-                  className="h-full overflow-y-auto space-y-3 py-4 px-3 text-center scrollbar-none scroll-smooth"
-                >
-                  {track.lyrics && track.lyrics.length > 0 ? (
-                    track.lyrics.map((line, idx) => {
-                      const isActive = idx === currentLyricIdx;
-                      const isPast = idx < currentLyricIdx;
-                      const isFuture = idx > currentLyricIdx;
-
-                      return (
-                        <div
-                          key={idx}
-                          data-lyric-idx={idx}
-                          data-active={isActive ? 'true' : undefined}
-                          onClick={() => {
-                            onSeek(line.time);
-                            scrollToActiveLine(idx, true);
-                          }}
-                          className={`group cursor-pointer transition-all duration-300 py-2 sm:py-2.5 px-3 rounded-xl select-none ${
-                            isActive
-                              ? 'bg-gradient-to-r from-cyan-500/20 via-cyan-400/15 to-indigo-500/20 border border-cyan-400/40 shadow-lg shadow-cyan-500/20 scale-105'
-                              : isPast
-                              ? 'opacity-65 hover:opacity-100 hover:bg-white/[0.04]'
-                              : 'opacity-35 hover:opacity-85 hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            {isActive && (
-                              <span className="w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-cyan-400/30 animate-pulse flex-shrink-0" />
-                            )}
-                            <p
-                              className={`font-black tracking-tight leading-relaxed transition-all duration-300 ${
-                                isActive
-                                  ? 'text-white text-base sm:text-lg drop-shadow-[0_0_15px_rgba(0,240,255,0.7)]'
-                                  : isPast
-                                  ? 'text-slate-300 text-xs sm:text-sm font-semibold'
-                                  : 'text-slate-400 text-xs font-normal'
-                              }`}
-                            >
-                              {line.text}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-slate-500 text-sm flex items-center justify-center h-full">
-                      Instrumental track · No vocal lyrics
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTabInSplit === 'equalizer' && (
-                <div className="space-y-4 p-2 overflow-y-auto scrollbar-none">
-                  <div className="flex flex-wrap gap-1.5">
-                    {EQ_PRESETS.map((p) => {
-                      const isMatch =
-                        equalizer.bass === p.eq.bass &&
-                        equalizer.mid === p.eq.mid &&
-                        equalizer.treble === p.eq.treble;
-                      return (
-                        <button
-                          key={p.name}
-                          onClick={() => onEqualizerChange(p.eq)}
-                          className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
-                            isMatch
-                              ? 'bg-cyan-500 text-slate-950 border-cyan-400'
-                              : 'bg-white/[0.04] text-slate-400 hover:text-white border-white/[0.08]'
-                          }`}
-                        >
-                          {p.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Sliders */}
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-300">Bass (200 Hz)</span>
-                        <span className="font-mono text-cyan-400">{equalizer.bass > 0 ? `+${equalizer.bass}` : equalizer.bass} dB</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={-12}
-                        max={12}
-                        value={equalizer.bass}
-                        onChange={(e) => onEqualizerChange({ ...equalizer, bass: Number(e.target.value) })}
-                        className="w-full accent-cyan-400"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-300">Mid (1 kHz)</span>
-                        <span className="font-mono text-purple-400">{equalizer.mid > 0 ? `+${equalizer.mid}` : equalizer.mid} dB</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={-12}
-                        max={12}
-                        value={equalizer.mid}
-                        onChange={(e) => onEqualizerChange({ ...equalizer, mid: Number(e.target.value) })}
-                        className="w-full accent-purple-400"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-300">Treble (4 kHz)</span>
-                        <span className="font-mono text-pink-400">{equalizer.treble > 0 ? `+${equalizer.treble}` : equalizer.treble} dB</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={-12}
-                        max={12}
-                        value={equalizer.treble}
-                        onChange={(e) => onEqualizerChange({ ...equalizer, treble: Number(e.target.value) })}
-                        className="w-full accent-pink-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTabInSplit === 'details' && (
-                <div className="space-y-3 p-2 text-xs">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Acoustic Specs</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <span className="text-slate-500 block text-[10px]">Quality</span>
-                      <span className="font-mono text-cyan-400 font-semibold">320 kbps High Res</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <span className="text-slate-500 block text-[10px]">BPM & Tempo</span>
-                      <span className="font-mono text-white font-semibold">{track.bpm} BPM</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <span className="text-slate-500 block text-[10px]">Musical Key</span>
-                      <span className="font-mono text-white font-semibold">{track.key}</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                      <span className="text-slate-500 block text-[10px]">Platform</span>
-                      <span className="font-mono text-cyan-400 font-semibold">{track.source || 'Resonance'}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* ================================================================= */}
-      {/* BOTTOM TRANSPORT CONTROLS (Fixed, Edge-to-Edge Liquid Glass)     */}
-      {/* ================================================================= */}
-      <footer className="relative z-20 px-4 sm:px-8 py-3 sm:py-5 border-t border-white/[0.08] bg-[#07080d]/95 backdrop-blur-2xl max-w-4xl mx-auto w-full space-y-3">
-        {/* Scrubber */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-slate-400 w-10 text-right">
-            {formatTime(currentTime)}
-          </span>
-          <div className="relative flex-1 group">
-            <div className="h-1.5 w-full bg-white/[0.08] rounded-full overflow-hidden">
+        {/* ----------------------------------------------------------- */}
+        {/* PROGRESS BAR / SCRUBBER & TIMESTAMPS                        */}
+        {/* ----------------------------------------------------------- */}
+        <div className="w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] space-y-1.5">
+          <div className="relative group flex items-center py-2 cursor-pointer">
+            {/* Gray track background */}
+            <div className="h-1.5 w-full bg-white/20 rounded-full overflow-hidden">
+              {/* White progress fill */}
               <div
-                className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 rounded-full"
+                className="h-full bg-white rounded-full transition-[width] duration-100"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
+
+            {/* Pill/capsule thumb at head of progress */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-2.5 bg-white rounded-full shadow-md pointer-events-none -ml-2"
+              style={{ left: `${progressPercent}%` }}
+            />
+
             <input
               type="range"
               min={0}
@@ -861,99 +313,357 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
           </div>
-          <span className="text-xs font-mono text-slate-400 w-10">
-            {formatTime(duration)}
-          </span>
+
+          {/* Timestamps */}
+          <div className="flex items-center justify-between text-xs text-white/60 font-medium font-mono px-0.5">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onToggleLike}
-              className="p-2 text-slate-400 hover:text-pink-400 transition-colors"
-              title="Like song"
-            >
-              <Heart className={`w-5 h-5 ${isLiked ? 'fill-pink-500 text-pink-500' : ''}`} />
-            </button>
-            <button
-              onClick={onShareTrack}
-              className="p-2 text-slate-400 hover:text-white transition-colors"
-              title="Share track"
-            >
-              <Share2 className="w-5 h-5" />
-            </button>
-          </div>
+        {/* ----------------------------------------------------------- */}
+        {/* CENTRAL TRANSPORT: PREVIOUS, ROTATING PLAY/PAUSE & NEXT    */}
+        {/* ----------------------------------------------------------- */}
+        <div className="flex items-center justify-center gap-7 sm:gap-9 w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] py-1">
+          {/* Previous Track: Dark Circular Button with |◀ */}
+          <button
+            onClick={onPrevious}
+            className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
+            title="Previous Track"
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+              <path d="M6 5v14h2V5H6zm3 7l10 7V5l-10 7z" />
+            </svg>
+          </button>
 
-          <div className="flex items-center gap-4 sm:gap-6">
-            <button
-              onClick={onToggleShuffle}
-              className={`p-2 transition-colors ${
-                isShuffle ? 'text-cyan-400' : 'text-slate-400 hover:text-white'
+          {/* Central Rotating Scalloped Rosette Play/Pause Button */}
+          <button
+            onClick={onTogglePlay}
+            className="relative w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center active:scale-95 transition-transform cursor-pointer group"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {/* Rotating 12-lobed Rosette Star Badge */}
+            <div
+              className={`w-full h-full ${
+                isPlaying
+                  ? 'animate-[spin_10s_linear_infinite]'
+                  : 'transition-transform duration-700'
               }`}
             >
-              <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+              <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
+                <path
+                  d="M 50.00 3.00 C 54.14 3.00, 55.65 10.10, 60.35 11.36 C 65.05 12.62, 69.91 7.23, 73.50 9.30 C 77.09 11.37, 74.84 18.28, 78.28 21.72 C 81.72 25.16, 88.63 22.91, 90.70 26.50 C 92.77 30.09, 87.38 34.95, 88.64 39.65 C 89.90 44.35, 97.00 45.86, 97.00 50.00 C 97.00 54.14, 89.90 55.65, 88.64 60.35 C 87.38 65.05, 92.77 69.91, 90.70 73.50 C 88.63 77.09, 81.72 74.84, 78.28 78.28 C 74.84 81.72, 77.09 88.63, 73.50 90.70 C 69.91 92.77, 65.05 87.38, 60.35 88.64 C 55.65 89.90, 54.14 97.00, 50.00 97.00 C 45.86 97.00, 44.35 89.90, 39.65 88.64 C 34.95 87.38, 30.09 92.77, 26.50 90.70 C 22.91 88.63, 25.16 81.72, 21.72 78.28 C 18.28 74.84, 11.37 77.09, 9.30 73.50 C 7.23 69.91, 12.62 65.05, 11.36 60.35 C 10.10 55.65, 3.00 54.14, 3.00 50.00 C 3.00 45.86, 10.10 44.35, 11.36 39.65 C 12.62 34.95, 7.23 30.09, 9.30 26.50 C 11.37 22.91, 18.28 25.16, 21.72 21.72 C 25.16 18.28, 22.91 11.37, 26.50 9.30 C 30.09 7.23, 34.95 12.62, 39.65 11.36 C 44.35 10.10, 45.86 3.00, 50.00 3.00 Z"
+                  fill="white"
+                />
+              </svg>
+            </div>
 
-            <button
-              onClick={onPrevious}
-              className="p-2 text-slate-300 hover:text-white transition-colors"
-            >
-              <SkipBack className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-            </button>
-
-            <button
-              onClick={onTogglePlay}
-              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-slate-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/25"
-            >
+            {/* Black Pause / Play Icon in Center */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               {isPlaying ? (
-                <Pause className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                <svg viewBox="0 0 24 24" className="w-8 h-8 fill-black">
+                  <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
+                </svg>
               ) : (
-                <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current ml-0.5" />
+                <svg viewBox="0 0 24 24" className="w-8 h-8 fill-black ml-1">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
               )}
-            </button>
+            </div>
+          </button>
 
-            <button
-              onClick={onNext}
-              className="p-2 text-slate-300 hover:text-white transition-colors"
-            >
-              <SkipForward className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-            </button>
+          {/* Next Track: Dark Circular Button with ▶| */}
+          <button
+            onClick={onNext}
+            className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
+            title="Next Track"
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+              <path d="M5 5v14l10-7-10-7zm11 0v14h2V5h-2z" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
-            <button
-              onClick={onToggleRepeat}
-              className={`p-2 transition-colors ${
-                isRepeat ? 'text-cyan-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </div>
+      {/* ------------------------------------------------------------- */}
+      {/* BOTTOM UTILITIES ROW: Queue, Sleep, EQ, Shuffle, Repeat, More */}
+      {/* ------------------------------------------------------------- */}
+      <footer className="w-full max-w-md mx-auto px-6 sm:px-10 pb-6 pt-1 z-20">
+        <div className="flex items-center justify-between w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] mx-auto">
+          {/* 1. Queue / Lyrics Toggle Button */}
+          <button
+            onClick={() => setShowLyricsDrawer(!showLyricsDrawer)}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+              showLyricsDrawer
+                ? 'bg-white/25 border-white text-white shadow-md'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80 hover:text-white'
+            }`}
+            title="Lyrics & Lyrics Synchronizer"
+          >
+            <ListMusic className="w-5 h-5 stroke-[2]" />
+          </button>
 
-          {/* Quick toggle lyrics / artwork pill right on the bottom bar */}
-          <div className="flex items-center">
-            {viewMode === 'lyrics-only' ? (
+          {/* 2. Sleep Timer Button */}
+          <button
+            onClick={() => setShowSleepTimerModal(true)}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 relative ${
+              sleepTimerMinutes !== null
+                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-md shadow-amber-500/20'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80 hover:text-white'
+            }`}
+            title={
+              sleepTimerMinutes
+                ? `Sleep Timer: ${Math.ceil((sleepTimerRemainingSec || 0) / 60)}m left`
+                : 'Set Sleep Timer'
+            }
+          >
+            <Moon className="w-5 h-5 stroke-[2]" />
+            {sleepTimerMinutes !== null && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            )}
+          </button>
+
+          {/* 3. Audio Equalizer Button */}
+          <button
+            onClick={() => {
+              if (onOpenEqualizer) onOpenEqualizer();
+            }}
+            className="w-11 h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer active:scale-95"
+            title="Studio Equalizer & DSP"
+          >
+            <Sliders className="w-5 h-5 stroke-[2]" />
+          </button>
+
+          {/* 4. Shuffle Button */}
+          <button
+            onClick={onToggleShuffle}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+              isShuffle
+                ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/20'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80 hover:text-white'
+            }`}
+            title={isShuffle ? 'Shuffle: On' : 'Shuffle: Off'}
+          >
+            <Shuffle className="w-5 h-5 stroke-[2]" />
+          </button>
+
+          {/* 5. Repeat Button */}
+          <button
+            onClick={onToggleRepeat}
+            className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+              isRepeat
+                ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/20'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/80 hover:text-white'
+            }`}
+            title={isRepeat ? 'Repeat: On' : 'Repeat: Off'}
+          >
+            <Repeat className="w-5 h-5 stroke-[2]" />
+          </button>
+
+          {/* 6. More Options Button (White Circle Button with 3 Dots) */}
+          <button
+            onClick={() => setShowMoreMenu(true)}
+            className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer shadow-lg active:scale-95"
+            title="More Options"
+          >
+            <MoreVertical className="w-5 h-5 stroke-[2.5]" />
+          </button>
+        </div>
+      </footer>
+
+      {/* ------------------------------------------------------------- */}
+      {/* OVERLAY 1: LIVE SYNCHRONIZED KARAOKE LYRICS DRAWER            */}
+      {/* ------------------------------------------------------------- */}
+      {showLyricsDrawer && (
+        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-2xl flex flex-col justify-end animate-fadeIn">
+          <div className="w-full max-w-xl mx-auto h-[78vh] bg-[#140e16]/95 border-t border-white/15 rounded-t-[32px] flex flex-col shadow-2xl overflow-hidden">
+            {/* Lyrics Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Live Synced Lyrics</h3>
+              </div>
               <button
-                onClick={() => setViewMode('artwork-only')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-[11px] font-bold text-slate-300 transition-all border border-white/[0.08]"
-                title="Switch to Artwork view"
+                onClick={() => setShowLyricsDrawer(false)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white"
               >
-                <Disc3 className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline">Cover Art</span>
+                <X className="w-5 h-5" />
               </button>
-            ) : (
+            </div>
+
+            {/* Lyrics Scrollable Body */}
+            <div
+              ref={lyricsContainerRef}
+              className="flex-1 overflow-y-auto px-6 py-8 space-y-5 text-center scrollbar-none"
+            >
+              {track.lyrics && track.lyrics.length > 0 ? (
+                track.lyrics.map((line, idx) => {
+                  const isActive = currentLyricIdx === idx;
+                  const isPast = currentLyricIdx > idx;
+
+                  return (
+                    <div
+                      key={idx}
+                      data-lyric-idx={idx}
+                      onClick={() => onSeek(line.time)}
+                      className={`cursor-pointer transition-all duration-300 py-2.5 px-4 rounded-2xl ${
+                        isActive
+                          ? 'bg-white/10 text-white font-extrabold text-xl sm:text-2xl scale-105'
+                          : isPast
+                          ? 'text-white/60 font-semibold text-base sm:text-lg'
+                          : 'text-white/30 font-medium text-sm sm:text-base hover:text-white/70'
+                      }`}
+                    >
+                      <p>{line.text}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                  <Music className="w-8 h-8 text-slate-500" />
+                  <p className="text-sm">Instrumental or synchronized lyrics not available for this song.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* OVERLAY 2: SLEEP TIMER MODAL                                  */}
+      {/* ------------------------------------------------------------- */}
+      {showSleepTimerModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm rounded-3xl bg-[#181119] border border-white/15 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white font-bold text-base">
+                <Moon className="w-5 h-5 text-amber-400" />
+                <span>Sleep Timer</span>
+              </div>
               <button
-                onClick={() => setViewMode('lyrics-only')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-[11px] font-bold text-slate-300 transition-all border border-white/[0.08]"
-                title="Switch to Lyrics Only view"
+                onClick={() => setShowSleepTimerModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
               >
-                <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline">Lyrics</span>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Music will automatically pause when the selected duration expires.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              {[15, 30, 45, 60].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => setSleepTimer(mins)}
+                  className={`py-3 px-4 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
+                    sleepTimerMinutes === mins
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20'
+                      : 'bg-white/5 hover:bg-white/10 text-white border-white/10'
+                  }`}
+                >
+                  <span>{mins} minutes</span>
+                  {sleepTimerMinutes === mins && <Check className="w-4 h-4 stroke-[3]" />}
+                </button>
+              ))}
+            </div>
+
+            {sleepTimerMinutes !== null && (
+              <button
+                onClick={() => setSleepTimer(null)}
+                className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Cancel Active Timer ({Math.ceil((sleepTimerRemainingSec || 0) / 60)}m left)
               </button>
             )}
           </div>
         </div>
-      </footer>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* OVERLAY 3: MORE OPTIONS MODAL (•••)                           */}
+      {/* ------------------------------------------------------------- */}
+      {showMoreMenu && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm rounded-3xl bg-[#181119] border border-white/15 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="min-w-0 flex-1 pr-2">
+                <h4 className="text-sm font-bold text-white truncate">{track.title}</h4>
+                <p className="text-xs text-slate-400 truncate">{track.artist}</p>
+              </div>
+              <button
+                onClick={() => setShowMoreMenu(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <button
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  onShareTrack();
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+              >
+                <Share2 className="w-4 h-4 text-cyan-400" />
+                <span>Share Song & Link</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowMoreMenu(false);
+                  setShowLyricsDrawer(true);
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span>View Full Synced Lyrics</span>
+              </button>
+
+              {onOpenEqualizer && (
+                <button
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onOpenEqualizer();
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+                >
+                  <Sliders className="w-4 h-4 text-purple-400" />
+                  <span>Equalizer & Acoustic DSP</span>
+                </button>
+              )}
+
+              {onDownloadTrack && (
+                <button
+                  onClick={() => {
+                    setShowMoreMenu(false);
+                    onDownloadTrack();
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/10 text-xs font-semibold text-white transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-amber-400" />
+                  <span>{isDownloaded ? 'Downloaded in Offline Vault' : 'Download for Offline Mode'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Audio Specs Summary */}
+            <div className="pt-3 border-t border-white/10 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400">
+              <div className="p-2 rounded-lg bg-white/5">
+                <span className="text-slate-500 block text-[9px] uppercase">Audio Bitrate</span>
+                <span className="text-white font-bold">320 kbps High-Res</span>
+              </div>
+              <div className="p-2 rounded-lg bg-white/5">
+                <span className="text-slate-500 block text-[9px] uppercase">Tempo & Key</span>
+                <span className="text-white font-bold">{track.bpm} BPM · {track.key}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

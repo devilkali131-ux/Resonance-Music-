@@ -16,14 +16,12 @@ import {
   Music,
   Shield,
   Sliders,
-  Smartphone,
-  Download,
   LogIn,
 } from 'lucide-react';
 import { Playlist } from '../types/music';
 import { ActiveTab } from './Sidebar';
 import { OfflineStorageStats } from '../services/offlineStorage';
-import { historyStorage } from '../services/historyStorage';
+import { historyStorage, UserProfile } from '../services/historyStorage';
 
 interface BottomMenuPopupProps {
   isOpen: boolean;
@@ -41,6 +39,7 @@ interface BottomMenuPopupProps {
   onOpenEqualizer?: () => void;
   onOpenApkModal?: () => void;
   onOpenGoogleAuth?: () => void;
+  userProfile?: UserProfile;
 }
 
 export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
@@ -59,16 +58,15 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
   onOpenEqualizer,
   onOpenApkModal,
   onOpenGoogleAuth,
+  userProfile: propUserProfile,
 }) => {
   if (!isOpen) return null;
 
-  const userProfile = historyStorage.getUserProfile();
+  const userProfile = propUserProfile || historyStorage.getUserProfile();
+  // Owner portal is strictly restricted to owner email devilkali131@gmail.com when logged in
   const isOwner =
-    (typeof window !== 'undefined' &&
-      sessionStorage.getItem('veltra_owner_unlocked') === 'true') ||
-    userProfile.email === 'devilkali131@gmail.com' ||
-    userProfile.role === 'owner' ||
-    userProfile.role === 'Admin';
+    userProfile.isLoggedIn &&
+    userProfile.email.toLowerCase().trim() === 'devilkali131@gmail.com';
 
   const mainCategories = [
     {
@@ -307,37 +305,6 @@ export const BottomMenuPopup: React.FC<BottomMenuPopupProps> = ({
                 </div>
                 <button className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer">
                   Open Portal →
-                </button>
-              </div>
-            )}
-
-            {/* Download Android APK & App Banner */}
-            {onOpenApkModal && (
-              <div
-                onClick={() => {
-                  onClose();
-                  onOpenApkModal();
-                }}
-                className="col-span-full p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-indigo-500/10 hover:from-emerald-500/20 hover:to-indigo-500/20 border border-emerald-400/30 hover:border-emerald-400/60 transition-all cursor-pointer shadow-md flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center border border-emerald-400/30">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-300 transition-colors flex items-center gap-2">
-                      <span>Download App (Android APK & PWA)</span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                        Direct Install
-                      </span>
-                    </h4>
-                    <p className="text-[11px] text-slate-400">
-                      Install native Android app package or generate APK on PWABuilder
-                    </p>
-                  </div>
-                </div>
-                <button className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs shadow-sm transition-all cursor-pointer">
-                  Get APK →
                 </button>
               </div>
             )}

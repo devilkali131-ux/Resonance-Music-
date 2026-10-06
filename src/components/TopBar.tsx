@@ -61,14 +61,12 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const currentProfile = propUserProfile || historyStorage.getUserProfile();
   const isHomeTab = activeTab === 'daily';
+  const isSearchTab = activeTab === 'search' || activeTab === 'discover';
 
-  // Owner authentication check - hidden for normal users unless unlocked
+  // Owner authentication check - strictly visible ONLY when logged in from owner's email id
   const isOwner =
-    (typeof window !== 'undefined' &&
-      sessionStorage.getItem('veltra_owner_unlocked') === 'true') ||
-    currentProfile.email === 'devilkali131@gmail.com' ||
-    currentProfile.role === 'owner' ||
-    currentProfile.role === 'Admin';
+    currentProfile.isLoggedIn &&
+    currentProfile.email.toLowerCase().trim() === 'devilkali131@gmail.com';
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -76,38 +74,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Triple-click logo counter for secret Owner Portal access
-  const logoClickCountRef = useRef(0);
-  const logoClickTimerRef = useRef<any>(null);
-
   const handleLogoClick = () => {
-    logoClickCountRef.current += 1;
-    if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
-
-    if (logoClickCountRef.current >= 3) {
-      logoClickCountRef.current = 0;
-      sessionStorage.setItem('veltra_owner_unlocked', 'true');
-      if (onOpenOwnerPortal) onOpenOwnerPortal();
-    } else {
-      logoClickTimerRef.current = setTimeout(() => {
-        logoClickCountRef.current = 0;
-        if (onNavigateTab) onNavigateTab('daily');
-      }, 380);
-    }
+    if (onNavigateTab) onNavigateTab('daily');
   };
-
-  // Keyboard shortcut Ctrl+Shift+O / Cmd+Shift+O for secret Owner access
-  useEffect(() => {
-    const handleGlobalKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
-        e.preventDefault();
-        sessionStorage.setItem('veltra_owner_unlocked', 'true');
-        if (onOpenOwnerPortal) onOpenOwnerPortal();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKey);
-    return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, [onOpenOwnerPortal]);
 
   // Load search history from local storage
   useEffect(() => {
@@ -194,13 +163,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const trimmed = searchQuery.trim().toLowerCase();
-      if (trimmed === '/owner' || trimmed === '/admin') {
-        sessionStorage.setItem('veltra_owner_unlocked', 'true');
-        if (onOpenOwnerPortal) onOpenOwnerPortal();
-        onSearchChange('');
-        return;
-      }
       if (searchQuery.trim()) {
         handleSelectTerm(searchQuery.trim());
       }
@@ -217,7 +179,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div
           className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-2xl overflow-hidden bg-black/50 border border-cyan-400/30 flex items-center justify-center shadow-lg shadow-cyan-500/20 group cursor-pointer"
           onClick={handleLogoClick}
-          title="Resonance Music Home (Triple-click for Owner Access)"
+          title="Resonance Music Home"
         >
           <img
             src="/resonance-logo.svg"
@@ -239,8 +201,8 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       </div>
 
-      {/* Clean Search Bar: REMOVED on Home Tab (search bar is accessed only via navigation bar) */}
-      {!isHomeTab ? (
+      {/* Clean Search Bar: ONLY on Search & Discover tabs, hidden on Home and Library */}
+      {isSearchTab ? (
         <div ref={containerRef} className="relative flex-1 max-w-xl mx-1 sm:mx-4 animate-fadeIn">
           <div className="relative flex items-center">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400 pointer-events-none" />
@@ -361,43 +323,54 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="flex-1" />
       )}
 
-      {/* Right Actions: Equalizer Pop-up, Listen with Friends, Owner Portal, and Sign In Symbol (Replacing RS; Download removed on home screen) */}
-      <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
+      {/* Right Actions: Equalizer Pop-up, Jam with Friends, Owner Portal, and Sign In Button */}
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 z-20">
         {/* Audio Equalizer Pop-up Button */}
         {onOpenEqualizer && (
           <button
             onClick={onOpenEqualizer}
             title="Audio Equalizer (Pop-up)"
-            className="p-2 text-slate-300 hover:text-cyan-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all cursor-pointer"
+            className="hidden xs:flex sm:flex p-2 text-slate-300 hover:text-cyan-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all cursor-pointer flex-shrink-0"
           >
             <Sliders className="w-4 h-4" />
           </button>
         )}
 
-        {/* Listen Together with Friends */}
-        {onToggleFriendDrawer && (
+        {/* Share Button (High Visibility) */}
+        {onOpenShareModal && (
           <button
-            onClick={onToggleFriendDrawer}
-            title="Listen Together with Friends"
-            className="p-2 text-slate-300 hover:text-pink-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all relative cursor-pointer"
+            onClick={onOpenShareModal}
+            title="Share Song & App"
+            className="p-2 text-slate-300 hover:text-cyan-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all cursor-pointer shadow-sm active:scale-95 flex-shrink-0"
           >
-            <Users className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#070914]" />
+            <Share2 className="w-4 h-4" />
           </button>
         )}
 
-        {/* Owner Access Portal Button - HIDDEN for normal users, only visible when logged in as owner or secretly unlocked */}
+        {/* Jam with Friends (Live Sync) */}
+        {onToggleFriendDrawer && (
+          <button
+            onClick={onToggleFriendDrawer}
+            title="Jam with Friends (Live Sync)"
+            className="p-2 text-slate-300 hover:text-cyan-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all relative cursor-pointer flex-shrink-0"
+          >
+            <Users className="w-4 h-4" />
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#070914] animate-pulse" />
+          </button>
+        )}
+
+        {/* Owner Access Portal Button - HIDDEN for normal users, only visible when logged in as owner */}
         {isOwner && onOpenOwnerPortal && (
           <button
             onClick={onOpenOwnerPortal}
             title="Owner Access Portal (Account Recovery & Management)"
-            className="p-2 text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded-full transition-all cursor-pointer animate-fadeIn"
+            className="p-2 text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded-full transition-all cursor-pointer animate-fadeIn flex-shrink-0"
           >
             <Shield className="w-4 h-4" />
           </button>
         )}
 
-        {/* Download App / Android APK Button (REMOVED FROM HOMETAB, available in menu and non-home tabs on larger screens) */}
+        {/* Download App / Android APK Button (Available on larger screens) */}
         {!isHomeTab && onOpenApkModal && (
           <button
             onClick={onOpenApkModal}
@@ -409,13 +382,13 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
-        {/* HIGH-VISIBILITY SIGN IN / USER PROFILE BUTTON (PROPERLY VISIBLE ACROSS ALL DEVICES) */}
+        {/* HIGH-VISIBILITY SIGN IN / USER PROFILE BUTTON (GUARANTEED 100% VISIBLE ON ALL SCREENS) */}
         <button
           onClick={onOpenGoogleAuth || onOpenOwnerPortal}
-          className={`flex items-center gap-1.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer flex-shrink-0 shadow-md ${
+          className={`flex items-center gap-1.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer flex-shrink-0 shadow-lg whitespace-nowrap ${
             currentProfile.isLoggedIn
               ? 'px-2.5 sm:px-3 bg-white/[0.08] hover:bg-white/[0.14] border border-cyan-400/50 text-white'
-              : 'px-3 sm:px-3.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-cyan-400/30 font-black'
+              : 'px-3 sm:px-3.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black shadow-cyan-400/30'
           }`}
           title={
             currentProfile.isLoggedIn
@@ -428,30 +401,19 @@ export const TopBar: React.FC<TopBarProps> = ({
               <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center font-black text-[10px] text-slate-950 flex-shrink-0">
                 {currentProfile.initials || 'U'}
               </div>
-              <span className="text-xs font-bold text-white max-w-[70px] sm:max-w-[100px] truncate">
+              <span className="text-xs font-bold text-white max-w-[60px] sm:max-w-[100px] truncate">
                 {currentProfile.name.split(' ')[0]}
               </span>
             </>
           ) : (
             <>
-              <LogIn className="w-4 h-4 text-slate-950 stroke-[2.5] flex-shrink-0" />
+              <LogIn className="w-3.5 h-3.5 text-slate-950 stroke-[3] flex-shrink-0" />
               <span className="text-xs font-black text-slate-950 tracking-tight">
                 Sign In
               </span>
             </>
           )}
         </button>
-
-        {/* Share Button (Desktop) */}
-        {onOpenShareModal && (
-          <button
-            onClick={onOpenShareModal}
-            title="Share Music"
-            className="hidden md:flex p-2 text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full transition-all cursor-pointer"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
-        )}
       </div>
     </header>
   );

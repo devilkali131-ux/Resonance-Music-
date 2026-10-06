@@ -10,6 +10,7 @@ import {
   Plus,
   Pin,
   Music,
+  Play,
   ArrowUpDown,
   ChevronUp,
   Sparkles,
@@ -31,6 +32,9 @@ interface LibraryViewProps {
   onCreatePlaylist: () => void;
   onDeletePlaylist?: (playlistId: string) => void;
   onToggleLike: (trackId: string) => void;
+  onDownloadTrack?: (track: Track) => void;
+  isDownloaded?: (trackId: string) => boolean;
+  onDownloadAll?: () => void;
   onOpenOfflineVault?: () => void;
   onOpenFavorites?: () => void;
   onRequireLogin?: () => void;
@@ -44,43 +48,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   favoriteTrackIds,
   downloadedTrackIds = [],
   currentTrackId,
+  isPlaying,
   onPlayTrack,
   onSelectPlaylist,
   onCreatePlaylist,
+  onToggleLike,
+  onDownloadTrack,
+  isDownloaded = () => false,
+  onDownloadAll,
   onOpenOfflineVault,
   onOpenFavorites,
-  onRequireLogin,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<LibraryFilter>('Playlists');
   const [sortAscending, setSortAscending] = useState(true);
-  const userProfile = historyStorage.getUserProfile();
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const showNotification = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   const FILTERS: LibraryFilter[] = ['Playlists', 'Songs', 'Albums', 'Artists', 'Local'];
 
-  // Handle Downloaded card click - Enforce login check
+  // Handle Downloaded card click - Seamlessly open offline vault
   const handleDownloadedClick = () => {
-    if (!userProfile.isLoggedIn) {
-      alert('Sign-in required: Please log in to your account to view and play downloaded offline songs.');
-      if (onRequireLogin) onRequireLogin();
-      return;
-    }
     if (onOpenOfflineVault) {
       onOpenOfflineVault();
     } else {
-      // Open synthetic downloaded playlist
-      const dlPlaylist: Playlist = {
-        id: 'downloaded-vault',
-        name: 'Downloaded Songs',
-        description: 'Offline storage vault with zero-buffer playback.',
-        tagline: 'Offline Storage',
-        accentColor: '#10b981',
-        coverGradient: 'linear-gradient(135deg, #052e16 0%, #065f46 50%, #10b981 100%)',
-        trackIds: downloadedTrackIds,
-        isAiGenerated: false,
-        createdAt: 'Offline Vault',
-        playCount: downloadedTrackIds.length,
-      };
-      onSelectPlaylist(dlPlaylist);
+      setSelectedFilter('Songs');
     }
   };
 
@@ -104,7 +99,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   };
 
-  // 8 Grid Shortcut Cards matching user screenshot exactly
+  // 8 Grid Shortcut Cards matching user screenshot
   const gridCards = [
     {
       id: 'liked',
@@ -123,11 +118,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     },
     {
       id: 'exported',
-      title: 'Exported',
+      title: 'Download All',
       icon: Download,
-      count: 0,
+      count: tracks.length,
       onClick: () => {
-        alert('Exported playlist files (.m3u, .json) are saved in your device storage.');
+        if (onDownloadAll) {
+          onDownloadAll();
+          showNotification(`Downloading ${tracks.length} tracks into device offline cache...`);
+        } else {
+          showNotification('Offline download manager active.');
+        }
       },
     },
     {
@@ -136,7 +136,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       icon: RefreshCw,
       count: tracks.length,
       onClick: () => {
-        alert(`${tracks.length} tracks actively cached for zero-latency streaming.`);
+        showNotification(`${tracks.length} tracks cached in high-speed storage.`);
       },
     },
     {
@@ -185,10 +185,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       id: 'local',
       title: 'Local',
       icon: Folder,
-      count: 0,
-      onClick: () => {
-        alert('Local audio file scanner: Place audio files in public/downloads or import from device.');
-      },
+      count: downloadedTrackIds.length,
+      onClick: handleDownloadedClick,
     },
   ];
 
@@ -302,81 +300,198 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         })}
       </div>
 
-      {/* 4. Playlists Showcase Section */}
-      <div className="pt-4 space-y-4 relative">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Playlists
-          </h3>
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs shadow-2xl shadow-cyan-500/40 animate-fadeIn">
+          {notification}
         </div>
+      )}
 
-        {/* Playlists 2-Column Grid matching screenshot */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* Dedicated Downloaded Music Playlist Card in Library section */}
-          <div
-            onClick={handleDownloadedClick}
-            className="group cursor-pointer space-y-2.5"
-          >
-            <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-emerald-500/40 bg-gradient-to-br from-emerald-950/80 via-[#0d1f18] to-[#0a1412] group-hover:scale-[1.02] transition-transform flex flex-col items-center justify-center p-4">
-              {downloadedTrackIds.length > 0 ? (
-                renderCollage(downloadedTrackIds)
-              ) : (
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
-                  <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
-                </div>
-              )}
-              <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 font-mono text-[9px] uppercase border border-emerald-400/30 font-bold backdrop-blur-md">
-                Offline
-              </span>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors truncate flex items-center gap-1.5">
-                <span>Downloaded Music</span>
-              </h4>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span>{downloadedTrackIds.length} offline songs</span>
-              </div>
-            </div>
+      {/* 4. Content Section: Songs vs Playlists depending on Filter */}
+      {selectedFilter === 'Songs' ? (
+        <div className="pt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              All Songs ({tracks.length})
+            </h3>
+            {onDownloadAll && (
+              <button
+                onClick={() => {
+                  onDownloadAll();
+                  showNotification(`Downloading all ${tracks.length} tracks into device offline cache...`);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 text-xs font-bold transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download All</span>
+              </button>
+            )}
           </div>
 
-          {playlists.map((playlist, idx) => {
-            return (
-              <div
-                key={playlist.id}
-                onClick={() => onSelectPlaylist(playlist)}
-                className="group cursor-pointer space-y-2.5"
-              >
-                {/* 2x2 Collage Artwork thumbnail container */}
-                <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-white/[0.08] bg-[#171922] group-hover:scale-[1.02] transition-transform">
-                  {renderCollage(playlist.trackIds)}
-                </div>
+          <div className="divide-y divide-white/[0.04] bg-white/[0.02] rounded-2xl border border-white/[0.06] overflow-hidden">
+            {tracks.map((track, i) => {
+              const isCurrent = currentTrackId === track.id;
+              const liked = favoriteTrackIds.includes(track.id);
+              const downloaded = isDownloaded(track.id);
 
-                {/* Playlist Info */}
-                <div>
-                  <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
-                    {playlist.name}
-                  </h4>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
-                    <Pin className="w-3 h-3 text-slate-500 fill-slate-500 rotate-45" />
-                    <span>{playlist.trackIds.length} songs</span>
+              return (
+                <div
+                  key={track.id}
+                  className={`group flex items-center justify-between px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] transition-colors ${
+                    isCurrent ? 'bg-cyan-500/10' : ''
+                  }`}
+                >
+                  <div
+                    onClick={() => onPlayTrack(track)}
+                    className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
+                  >
+                    <span className="w-5 text-center text-xs font-mono text-slate-500 group-hover:hidden">
+                      {i + 1}
+                    </span>
+                    <span className="hidden group-hover:flex w-5 h-5 items-center justify-center text-cyan-400">
+                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                    </span>
+
+                    <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.1]">
+                      <img
+                        src={track.coverUrl}
+                        alt={track.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      {downloaded && (
+                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h4
+                        className={`text-sm font-bold truncate ${
+                          isCurrent ? 'text-cyan-300' : 'text-slate-100'
+                        }`}
+                      >
+                        {track.title}
+                      </h4>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">{track.artist}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <span className="hidden sm:inline text-xs font-mono text-slate-400 w-12 text-right">
+                      {Math.floor(track.duration / 60)}:
+                      {(track.duration % 60).toString().padStart(2, '0')}
+                    </span>
+
+                    <button
+                      onClick={() => onToggleLike(track.id)}
+                      className="p-1.5 text-slate-400 hover:text-pink-400 transition-colors cursor-pointer"
+                      title={liked ? 'Unlike' : 'Like'}
+                    >
+                      <Heart
+                        className={`w-4 h-4 ${liked ? 'fill-pink-500 text-pink-500' : ''}`}
+                      />
+                    </button>
+
+                    {/* Prominent Working Download Button in Library */}
+                    {onDownloadTrack && (
+                      <button
+                        onClick={() => onDownloadTrack(track)}
+                        title={downloaded ? 'Saved in Downloaded Music' : 'Download track for offline listening'}
+                        className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                          downloaded
+                            ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                            : 'text-slate-400 hover:text-cyan-300 hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        {downloaded ? (
+                          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                        ) : (
+                          <Download className="w-4 h-4 stroke-[2]" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
+      ) : (
+        /* Playlists Showcase Section */
+        <div className="pt-4 space-y-4 relative">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Playlists
+            </h3>
+          </div>
 
-        {/* Floating Circular '+' Button to create new playlist */}
-        <button
-          onClick={onCreatePlaylist}
-          className="fixed bottom-24 right-5 sm:right-10 z-40 w-14 h-14 rounded-full bg-white hover:bg-slate-100 text-slate-950 flex items-center justify-center shadow-2xl shadow-black/80 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-          title="Create New Playlist"
-        >
-          <Plus className="w-6 h-6 stroke-[2.5]" />
-        </button>
-      </div>
+          {/* Playlists 2-Column Grid matching screenshot */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Dedicated Downloaded Music Playlist Card in Library section */}
+            <div
+              onClick={handleDownloadedClick}
+              className="group cursor-pointer space-y-2.5"
+            >
+              <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-emerald-500/40 bg-gradient-to-br from-emerald-950/80 via-[#0d1f18] to-[#0a1412] group-hover:scale-[1.02] transition-transform flex flex-col items-center justify-center p-4">
+                {downloadedTrackIds.length > 0 ? (
+                  renderCollage(downloadedTrackIds)
+                ) : (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
+                    <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
+                  </div>
+                )}
+                <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 font-mono text-[9px] uppercase border border-emerald-400/30 font-bold backdrop-blur-md">
+                  Offline
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors truncate flex items-center gap-1.5">
+                  <span>Downloaded Music</span>
+                </h4>
+                <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span>{downloadedTrackIds.length} offline songs</span>
+                </div>
+              </div>
+            </div>
+
+            {playlists.map((playlist) => {
+              return (
+                <div
+                  key={playlist.id}
+                  onClick={() => onSelectPlaylist(playlist)}
+                  className="group cursor-pointer space-y-2.5"
+                >
+                  {/* 2x2 Collage Artwork thumbnail container */}
+                  <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-white/[0.08] bg-[#171922] group-hover:scale-[1.02] transition-transform">
+                    {renderCollage(playlist.trackIds)}
+                  </div>
+
+                  {/* Playlist Info */}
+                  <div>
+                    <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
+                      {playlist.name}
+                    </h4>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                      <Pin className="w-3 h-3 text-slate-500 fill-slate-500 rotate-45" />
+                      <span>{playlist.trackIds.length} songs</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Floating Circular '+' Button to create new playlist */}
+          <button
+            onClick={onCreatePlaylist}
+            className="fixed bottom-24 right-5 sm:right-10 z-40 w-14 h-14 rounded-full bg-white hover:bg-slate-100 text-slate-950 flex items-center justify-center shadow-2xl shadow-black/80 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            title="Create New Playlist"
+          >
+            <Plus className="w-6 h-6 stroke-[2.5]" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

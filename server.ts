@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import CryptoJS from 'crypto-js';
 import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
@@ -410,7 +411,7 @@ function parseYouTubeMusicItem(item: any, source: 'youtube_music' | 'spotify' = 
       artist,
       album,
       duration: 215,
-      audioUrl: `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(videoId.charCodeAt(0) % 8) + 1}.mp3`,
+      audioUrl: '',
       coverUrl,
       genre: 'New Music',
       bpm: 120,
@@ -467,7 +468,7 @@ function parseYouTubeMusicItem(item: any, source: 'youtube_music' | 'spotify' = 
     artist,
     album,
     duration,
-    audioUrl: `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(videoId.charCodeAt(0) % 8) + 1}.mp3`,
+    audioUrl: '',
     coverUrl,
     genre: 'Streaming',
     bpm: 115,
@@ -717,7 +718,107 @@ app.get('/api/external/suggestions', async (req: Request, res: Response) => {
   }
 });
 
-// YouTube Music & Spotify Live Search endpoint (Powered by InnerTube song filter + instant fallback)
+// Helper to decrypt JioSaavn full-length media streams using DES-ECB
+const SAAVN_DES_KEY = CryptoJS.enc.Utf8.parse('38346591');
+
+function decryptSaavnMediaUrl(encryptedUrl: string): string | null {
+  try {
+    const cipherParams = CryptoJS.lib.CipherParams.create({
+      ciphertext: CryptoJS.enc.Base64.parse(encryptedUrl),
+    });
+    const decrypted = CryptoJS.DES.decrypt(
+      cipherParams,
+      SAAVN_DES_KEY,
+      { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
+    );
+    const url = decrypted.toString(CryptoJS.enc.Utf8);
+    if (!url) return null;
+    return url.replace('_96.mp4', '_160.mp4');
+  } catch {
+    return null;
+  }
+}
+
+// In-memory cache for resolved online audio streams and covers
+const audioResolveCache = new Map<string, { audioUrl: string; coverUrl?: string; duration?: number }>();
+
+// Helper to resolve real official streaming audio for any track (prioritizing 100% full-length songs)
+async function getRealAudioStream(title: string, artist: string): Promise<{ audioUrl: string; coverUrl?: string; duration?: number } | null> {
+  const cleanT = cleanTitle(title);
+  const cleanA = cleanArtist(artist);
+  const cacheKey = `${cleanT.toLowerCase()}:::${cleanA.toLowerCase()}`;
+  if (audioResolveCache.has(cacheKey)) {
+    return audioResolveCache.get(cacheKey)!;
+  }
+
+  // 1. Try JioSaavn Full-Length High-Fidelity Audio API (official full songs, 160kbps, no 30s limit)
+  try {
+    const saavnQuery = `${cleanT} ${cleanA}`.replace(/\([^)]*\)/g, '').trim();
+    const saavnRes = await fetch(
+      `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&p=1&n=5&q=${encodeURIComponent(saavnQuery)}`,
+      { headers: { 'User-Agent': 'ResonanceMusic/1.0' } }
+    );
+    if (saavnRes.ok) {
+      const saavnData = await saavnRes.json();
+      const songs = saavnData.results || [];
+      for (const song of songs) {
+        if (song.encrypted_media_url) {
+          const fullAudioUrl = decryptSaavnMediaUrl(song.encrypted_media_url);
+          if (fullAudioUrl) {
+            const resObj = {
+              audioUrl: fullAudioUrl,
+              coverUrl: song.image ? song.image.replace('150x150', '500x500') : undefined,
+              duration: parseInt(song.duration) || 210,
+            };
+            audioResolveCache.set(cacheKey, resObj);
+            return resObj;
+          }
+        }
+      }
+    }
+  } catch (saavnErr) {
+    console.warn('Saavn full stream resolution notice:', saavnErr);
+  }
+
+  // 2. Fallback to iTunes Audio
+  try {
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(`${cleanT} ${cleanA}`)}&media=music&entity=song&limit=1`;
+    const res = await fetch(itunesUrl, { headers: { 'User-Agent': 'ResonanceMusic/1.0' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results[0] && data.results[0].previewUrl) {
+        const item = data.results[0];
+        const resObj = {
+          audioUrl: item.previewUrl,
+          coverUrl: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : undefined,
+          duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+        };
+        audioResolveCache.set(cacheKey, resObj);
+        return resObj;
+      }
+    }
+  } catch (err) {
+    console.warn('Error resolving real audio stream:', err);
+  }
+  return null;
+}
+
+// Endpoint to dynamically resolve real online audio stream for any track on-demand
+app.get('/api/external/resolve-audio', async (req: Request, res: Response) => {
+  const title = ((req.query.title as string) || '').trim();
+  const artist = ((req.query.artist as string) || '').trim();
+  if (!title) {
+    return res.status(400).json({ error: 'Title required' });
+  }
+
+  const resolved = await getRealAudioStream(title, artist);
+  if (resolved) {
+    return res.json(resolved);
+  }
+  return res.json({ audioUrl: null, coverUrl: null });
+});
+
+// YouTube Music & Spotify Live Search endpoint (Powered by real high-res online audio streaming & covers)
 app.get('/api/external/search', async (req: Request, res: Response) => {
   try {
     const query = ((req.query.q as string) || '').trim();
@@ -727,62 +828,79 @@ app.get('/api/external/search', async (req: Request, res: Response) => {
       return res.json({ results: [] });
     }
 
-    // Call real YouTube Music InnerTube search API with Song filter
     let results: any[] = [];
+
+    // 1. Primary Full-Length Music Search (delivers real full-length 160kbps songs and 500x500 covers)
     try {
-      const ytRes = await fetch('https://music.youtube.com/youtubei/v1/search', {
-        method: 'POST',
-        headers: YT_HEADERS,
-        body: JSON.stringify({
-          context: YT_CONTEXT,
-          query,
-          params: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D', // InnerTube FILTER_SONG
-        }),
-      });
+      const saavnRes = await fetch(
+        `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&p=1&n=20&q=${encodeURIComponent(query)}`,
+        { headers: { 'User-Agent': 'ResonanceMusic/1.0' } }
+      );
+      if (saavnRes.ok) {
+        const saavnData = await saavnRes.json();
+        const songs = saavnData.results || [];
+        for (let idx = 0; idx < songs.length; idx++) {
+          const item = songs[idx];
+          if (!item.encrypted_media_url) continue;
+          const fullAudio = decryptSaavnMediaUrl(item.encrypted_media_url);
+          if (!fullAudio) continue;
 
-      if (ytRes.ok) {
-        const data = await ytRes.json();
-        const shelf =
-          data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
-            ?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer;
+          const assignedSource =
+            platform === 'spotify'
+              ? 'spotify'
+              : platform === 'youtube_music'
+              ? 'youtube_music'
+              : idx % 2 === 0
+              ? 'spotify'
+              : 'youtube_music';
 
-        const rawItems = shelf?.contents || [];
-        results = rawItems
-          .map((item: any, idx: number) => {
-            const assignedSource =
-              platform === 'spotify'
-                ? 'spotify'
-                : platform === 'youtube_music'
-                ? 'youtube_music'
-                : idx % 2 === 0
-                ? 'youtube_music'
-                : 'spotify';
-            return parseYouTubeMusicItem(item, assignedSource);
-          })
-          .filter(Boolean);
+          const title = item.song ? item.song.replace(/&quot;/g, '"').replace(/&#039;/g, "'") : 'Untitled Track';
+          const artist = item.primary_artists || item.singers || 'Unknown Artist';
+          const album = item.album || 'Single';
+          const duration = parseInt(item.duration) || 210;
+          const coverUrl = item.image
+            ? item.image.replace('150x150', '500x500')
+            : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80';
+
+          results.push({
+            id: `track-${item.id || idx}-${Date.now()}`,
+            title,
+            artist,
+            album,
+            duration,
+            audioUrl: fullAudio,
+            coverUrl,
+            genre: item.language || 'Popular',
+            bpm: 120,
+            key: 'C major',
+            mood: 'Trending Hit',
+            plays: parseInt(item.play_count) || Math.floor(Math.random() * 500000) + 100000,
+            popularity: 95,
+            releaseYear: item.year ? parseInt(item.year) : 2025,
+            accentColor: assignedSource === 'spotify' ? '#1db954' : '#00f0ff',
+            source: assignedSource,
+            spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(`${title} ${artist}`)}`,
+            youtubeMusicUrl: `https://music.youtube.com/search?q=${encodeURIComponent(`${title} ${artist}`)}`,
+            lyrics: [],
+          });
+        }
       }
-    } catch (ytErr) {
-      console.warn('InnerTube search issue, engaging resilient secondary catalog:', ytErr);
+    } catch (saavnErr) {
+      console.warn('Saavn primary search notice:', saavnErr);
     }
 
-    // If InnerTube search yielded 0 results, query secondary high-res audio catalog
-    if (results.length === 0) {
+    // 2. If fewer than 5 results, augment with iTunes
+    if (results.length < 5) {
       try {
-        const fallbackRes = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=15`
+        const itunesRes = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=15`,
+          { headers: { 'User-Agent': 'ResonanceMusic/1.0' } }
         );
-        if (fallbackRes.ok) {
-          const fbData = await fallbackRes.json();
-          results = (fbData.results || []).map((item: any, idx: number) => {
-            const assignedSource =
-              platform === 'spotify'
-                ? 'spotify'
-                : platform === 'youtube_music'
-                ? 'youtube_music'
-                : idx % 2 === 0
-                ? 'spotify'
-                : 'youtube_music';
-
+        if (itunesRes.ok) {
+          const data = await itunesRes.json();
+          const rawTracks = data.results || [];
+          rawTracks.forEach((item: any, idx: number) => {
+            const assignedSource = idx % 2 === 0 ? 'spotify' : 'youtube_music';
             const title = item.trackName || 'Untitled Track';
             const artist = item.artistName || 'Unknown Artist';
             const album = item.collectionName || 'Single';
@@ -791,32 +909,66 @@ app.get('/api/external/search', async (req: Request, res: Response) => {
               ? item.artworkUrl100.replace('100x100bb', '600x600bb')
               : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80';
 
-            return {
-              id: `ext-${item.trackId || idx}-${Date.now()}`,
+            results.push({
+              id: `track-itunes-${item.trackId || idx}-${Date.now()}`,
               title,
               artist,
               album,
               duration,
-              audioUrl:
-                item.previewUrl || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+              audioUrl: item.previewUrl,
               coverUrl,
               genre: item.primaryGenreName || 'Popular',
-              bpm: 118,
+              bpm: 120,
               key: 'C major',
               mood: 'Trending Hit',
-              plays: Math.floor(Math.random() * 200000) + 50000,
-              popularity: 88,
+              plays: Math.floor(Math.random() * 500000) + 100000,
+              popularity: 90,
               releaseYear: item.releaseDate ? new Date(item.releaseDate).getFullYear() : 2025,
-              accentColor: assignedSource === 'spotify' ? '#1db954' : '#ff0000',
+              accentColor: assignedSource === 'spotify' ? '#1db954' : '#00f0ff',
               source: assignedSource,
               spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(`${title} ${artist}`)}`,
               youtubeMusicUrl: `https://music.youtube.com/search?q=${encodeURIComponent(`${title} ${artist}`)}`,
               lyrics: [],
-            };
+            });
           });
         }
-      } catch (fbErr) {
-        console.warn('Fallback search error:', fbErr);
+      } catch (itunesErr) {
+        console.warn('iTunes fallback search issue:', itunesErr);
+      }
+    }
+
+    // 2. If primary returned fewer than 5 results, augment with YouTube Music
+    if (results.length < 5) {
+      try {
+        const ytRes = await fetch('https://music.youtube.com/youtubei/v1/search', {
+          method: 'POST',
+          headers: YT_HEADERS,
+          body: JSON.stringify({
+            context: YT_CONTEXT,
+            query,
+            params: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D',
+          }),
+        });
+
+        if (ytRes.ok) {
+          const data = await ytRes.json();
+          const shelf =
+            data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+              ?.sectionListRenderer?.contents?.[0]?.musicShelfRenderer;
+
+          const rawItems = shelf?.contents || [];
+          const ytTracks = rawItems
+            .map((item: any, idx: number) => {
+              const assignedSource =
+                platform === 'spotify' ? 'spotify' : 'youtube_music';
+              return parseYouTubeMusicItem(item, assignedSource);
+            })
+            .filter(Boolean);
+
+          results = [...results, ...ytTracks];
+        }
+      } catch (ytErr) {
+        console.warn('YouTube search fallback error:', ytErr);
       }
     }
 

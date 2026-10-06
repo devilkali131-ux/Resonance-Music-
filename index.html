@@ -22,8 +22,8 @@
   </head>
   <body class="bg-[#090a0f] text-[#f1f3f7] antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
     <div id="root"></div>
-    <!-- Hidden audio/video engine anchor for YouTube Music playback -->
-    <div id="resonance-yt-player-container" style="position: fixed; width: 1px; height: 1px; left: -9999px; top: -9999px; pointer-events: none; opacity: 0; z-index: -1;">
+    <!-- Audio/video engine anchor for YouTube Music playback (kept in viewport to prevent browser throttling) -->
+    <div id="resonance-yt-player-container" style="position: fixed; width: 200px; height: 120px; bottom: 0; right: 0; pointer-events: none; opacity: 0.01; z-index: 1;">
       <div id="resonance-yt-player"></div>
     </div>
     <script src="https://www.youtube.com/iframe_api" async></script>

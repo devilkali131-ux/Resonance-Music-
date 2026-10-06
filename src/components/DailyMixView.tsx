@@ -189,20 +189,38 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                   </p>
                 </div>
 
-                {/* Floating Play Action */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPlayTrack(track);
-                  }}
-                  className={`absolute right-4 bottom-4 w-12 h-12 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-2xl transition-all z-20 ${
-                    isCurrent && isPlaying
-                      ? 'scale-100 opacity-100'
-                      : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
-                  }`}
-                >
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
-                </button>
+                {/* Floating Actions on Hero Artwork */}
+                <div className="absolute right-4 bottom-4 flex items-center gap-2 z-20">
+                  {onDownloadTrack && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownloadTrack(track);
+                      }}
+                      className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 text-white hover:text-cyan-300 border border-white/20 flex items-center justify-center shadow-xl transition-all cursor-pointer active:scale-95"
+                      title={isDownloaded(track.id) ? 'Downloaded offline' : 'Download track for offline playback'}
+                    >
+                      {isDownloaded(track.id) ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                      ) : (
+                        <Download className="w-4 h-4 text-cyan-300" />
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlayTrack(track);
+                    }}
+                    className={`w-12 h-12 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-2xl transition-all ${
+                      isCurrent && isPlaying
+                        ? 'scale-100 opacity-100'
+                        : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
+                    }`}
+                  >
+                    <Play className="w-5 h-5 fill-current ml-0.5" />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -255,13 +273,33 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </AmbientArtGlow>
-                  <button
-                    className={`absolute right-2 bottom-2 w-9 h-9 rounded-full bg-cyan-400 text-slate-950 flex items-center justify-center shadow-lg transition-transform ${
-                      isCurrent && isPlaying ? 'scale-100' : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
-                    }`}
-                  >
-                    <Play className="w-4 h-4 fill-current ml-0.5" />
-                  </button>
+                  
+                  {/* Floating Action Buttons directly on artwork */}
+                  <div className="absolute right-2 bottom-2 flex items-center gap-1.5 z-20">
+                    {onDownloadTrack && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDownloadTrack(track);
+                        }}
+                        className="w-8 h-8 rounded-full bg-black/75 hover:bg-black text-white hover:text-cyan-300 border border-white/20 flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer"
+                        title={isDownloaded(track.id) ? 'Downloaded offline' : 'Download track'}
+                      >
+                        {isDownloaded(track.id) ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5 text-cyan-300" />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      className={`w-8 h-8 rounded-full bg-cyan-400 text-slate-950 flex items-center justify-center shadow-lg transition-transform ${
+                        isCurrent && isPlaying ? 'scale-100' : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
+                      }`}
+                    >
+                      <Play className="w-4 h-4 fill-current ml-0.5" />
+                    </button>
+                  </div>
                 </div>
                 <h4 className="text-xs sm:text-sm font-bold text-white truncate">{track.title}</h4>
                 <p className="text-[11px] text-slate-400 truncate">{track.artist}</p>
@@ -327,6 +365,23 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 ml-2">
+                  {onDownloadTrack && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownloadTrack(track);
+                      }}
+                      title={isDownloaded(track.id) ? 'Saved in Downloaded Music' : 'Download for offline playback'}
+                      className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                    >
+                      {isDownloaded(track.id) ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+
                   {onOpenLyrics && (
                     <button
                       onClick={(e) => {

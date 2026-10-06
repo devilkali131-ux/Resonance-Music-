@@ -112,16 +112,7 @@ export const historyStorage = {
         localStorage.getItem(PROFILE_KEY) ||
         localStorage.getItem('veltra_user_profile');
       if (data) {
-        const parsed = JSON.parse(data);
-        // Safety check: ensure no hardcoded personal details ever leak
-        if (
-          parsed.email?.includes('devilkali') ||
-          parsed.name?.toLowerCase().includes('rishi')
-        ) {
-          localStorage.removeItem(PROFILE_KEY);
-          return DEFAULT_GUEST_PROFILE;
-        }
-        return parsed;
+        return JSON.parse(data);
       }
     } catch {
       // Ignore

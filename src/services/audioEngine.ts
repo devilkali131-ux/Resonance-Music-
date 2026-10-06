@@ -6,6 +6,7 @@ type AudioEventCallback = (event: {
   isPlaying: boolean;
   buffered: number;
   isSynthesizedFallback?: boolean;
+  isEnded?: boolean;
 }) => void;
 
 class AudioEngine {
@@ -63,11 +64,19 @@ class AudioEngine {
     });
     this.audio.addEventListener('ended', () => {
       this.isPlaying = false;
-      this.notify();
+      this.notify(true);
     });
     this.audio.addEventListener('error', (e) => {
-      console.warn('Audio streaming encountered issue, seamlessly engaging Resonance Procedural Synth Engine', e);
-      if (this.currentTrack) {
+      console.warn('Audio streaming encountered issue:', e);
+      if (this.audio && this.audio.crossOrigin) {
+        this.audio.crossOrigin = null;
+        if (this.currentTrack?.audioUrl) {
+          this.audio.src = this.currentTrack.audioUrl;
+          this.audio.play().catch(() => {});
+          return;
+        }
+      }
+      if (this.currentTrack && !navigator.onLine) {
         this.startProceduralSynth(this.currentTrack);
       }
     });
@@ -133,6 +142,9 @@ class AudioEngine {
 
     const onPlayerReady = (event: any) => {
       try {
+        if (typeof event.target.unMute === 'function') {
+          event.target.unMute();
+        }
         event.target.setVolume(this.isMuted ? 0 : Math.round(this.volume * 100));
         if (startTime > 0) {
           event.target.seekTo(startTime, true);
@@ -156,6 +168,8 @@ class AudioEngine {
       } else if (event.data === 0) {
         this.isPlaying = false;
         this.stopYouTubePolling();
+        this.notify(true);
+        return;
       }
       this.notify();
     };
@@ -182,8 +196,8 @@ class AudioEngine {
       if (win.YT && win.YT.Player) {
         try {
           this.ytPlayer = new win.YT.Player('resonance-yt-player', {
-            height: '1',
-            width: '1',
+            height: '160',
+            width: '240',
             videoId,
             playerVars: {
               autoplay: 1,
@@ -194,18 +208,16 @@ class AudioEngine {
               modestbranding: 1,
               playsinline: 1,
               rel: 0,
-              origin: window.location.origin,
+              origin: typeof window !== 'undefined' ? window.location.origin : undefined,
             },
             events: {
               onReady: onPlayerReady,
               onStateChange: onStateChange,
               onError: (e: any) => {
-                console.warn('YouTube embed restricted, seamlessly switching to audio stream:', e);
+                console.warn('YouTube embed restricted, switching to real audio stream:', e);
                 this.isYouTubeTrack = false;
-                if (this.currentTrack?.audioUrl) {
+                if (this.currentTrack) {
                   this.playAudioElement(this.currentTrack, startTime);
-                } else if (this.currentTrack) {
-                  this.startProceduralSynth(this.currentTrack);
                 }
               },
             },
@@ -215,6 +227,12 @@ class AudioEngine {
         }
       } else if (attempts < 25) {
         setTimeout(() => checkYTReady(attempts + 1), 200);
+      } else {
+        // Fallback to direct audio stream if YouTube API timed out
+        this.isYouTubeTrack = false;
+        if (this.currentTrack) {
+          this.playAudioElement(this.currentTrack, startTime);
+        }
       }
     };
 
@@ -254,13 +272,47 @@ class AudioEngine {
   private async playAudioElement(track: Track, startTime = 0) {
     if (!this.audio) return;
     try {
-      this.audio.src = track.audioUrl;
-      this.audio.currentTime = startTime;
-      await this.audio.play();
-      this.isPlaying = true;
-      this.notify();
-    } catch {
-      this.startProceduralSynth(track);
+      this.audio.volume = this.isMuted ? 0 : this.volume;
+      if (track.audioUrl && !track.audioUrl.includes('soundhelix') && !track.audioUrl.includes('freesound.org')) {
+        this.audio.src = track.audioUrl;
+        this.audio.currentTime = startTime;
+        await this.audio.play();
+        this.isPlaying = true;
+        this.notify();
+        return;
+      }
+      throw new Error('Need online audio resolution');
+    } catch (err) {
+      console.warn('Primary audio stream playback notice, resolving live online stream:', err);
+      try {
+        const resolveRes = await fetch(
+          `/api/external/resolve-audio?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(
+            track.artist
+          )}`
+        );
+        if (resolveRes.ok) {
+          const data = await resolveRes.json();
+          if (data.audioUrl) {
+            track.audioUrl = data.audioUrl;
+            if (data.coverUrl && (!track.coverUrl || track.coverUrl.includes('placeholder'))) {
+              track.coverUrl = data.coverUrl;
+            }
+            this.audio.volume = this.isMuted ? 0 : this.volume;
+            this.audio.src = data.audioUrl;
+            this.audio.currentTime = startTime;
+            await this.audio.play();
+            this.isPlaying = true;
+            this.notify();
+            return;
+          }
+        }
+      } catch (resolveErr) {
+        console.warn('Dynamic stream resolution error:', resolveErr);
+      }
+
+      if (!navigator.onLine) {
+        this.startProceduralSynth(track);
+      }
     }
   }
 
@@ -275,15 +327,7 @@ class AudioEngine {
       return;
     }
 
-    // If track has YouTube Video ID (from YouTube Music search or trending)
-    if (track.youtubeVideoId) {
-      if (this.audio) this.audio.pause();
-      this.initYouTubePlayer(track.youtubeVideoId, startTime);
-      return;
-    }
-
-    // Standard audio element playback
-    this.isYouTubeTrack = false;
+    // Stop YouTube Player if running
     this.stopYouTubePolling();
     if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try {
@@ -293,6 +337,61 @@ class AudioEngine {
       }
     }
 
+    // 1. Direct audio stream playback (Prioritized for real, official high-fidelity full songs)
+    const isDirectFullSong =
+      track.audioUrl &&
+      (track.audioUrl.includes('saavncdn') ||
+        track.audioUrl.endsWith('.mp4') ||
+        track.audioUrl.endsWith('.aac') ||
+        track.audioUrl.endsWith('.mp3'));
+
+    if (isDirectFullSong) {
+      this.isYouTubeTrack = false;
+      await this.playAudioElement(track, startTime);
+      return;
+    }
+
+    // 2. If track has an iTunes 30s preview or missing full audio, auto-resolve full online stream
+    if (
+      track.audioUrl?.includes('itunes.apple.com') ||
+      track.audioUrl?.includes('previewUrl') ||
+      !track.audioUrl
+    ) {
+      try {
+        const resolveRes = await fetch(
+          `/api/external/resolve-audio?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(
+            track.artist
+          )}`
+        );
+        if (resolveRes.ok) {
+          const data = await resolveRes.json();
+          if (data.audioUrl) {
+            track.audioUrl = data.audioUrl;
+            if (data.coverUrl && (!track.coverUrl || track.coverUrl.includes('placeholder'))) {
+              track.coverUrl = data.coverUrl;
+            }
+            if (data.duration && data.duration > 0) {
+              track.duration = data.duration;
+            }
+            this.isYouTubeTrack = false;
+            await this.playAudioElement(track, startTime);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Auto resolve full stream notice:', e);
+      }
+    }
+
+    // 3. YouTube video stream playback (if available and not restricted)
+    if (track.youtubeVideoId) {
+      if (this.audio) this.audio.pause();
+      this.initYouTubePlayer(track.youtubeVideoId, startTime);
+      return;
+    }
+
+    // 4. Fallback direct audio stream playback
+    this.isYouTubeTrack = false;
     await this.playAudioElement(track, startTime);
   }
 
@@ -612,7 +711,7 @@ class AudioEngine {
     };
   }
 
-  private notify() {
+  private notify(isEnded = false) {
     let curTime = 0;
     let dur = this.currentTrack?.duration || 210;
     let buffered = 0;
@@ -639,6 +738,7 @@ class AudioEngine {
       isPlaying: this.isPlaying,
       buffered,
       isSynthesizedFallback: this.isSynthesizing,
+      isEnded,
     };
 
     this.listeners.forEach((cb) => cb(payload));

@@ -105,14 +105,11 @@ export const OwnerAccessPortalModal: React.FC<OwnerAccessPortalModalProps> = ({
   const [loginPassword, setLoginPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Security Gate for Owner Verification
+  // Security Gate for Owner Verification - strictly requires login from devilkali131@gmail.com
   const currentProfile = historyStorage.getUserProfile();
   const isDefaultOwner =
-    currentProfile.email === 'devilkali131@gmail.com' ||
-    currentProfile.role === 'owner' ||
-    currentProfile.role === 'Admin' ||
-    (typeof window !== 'undefined' &&
-      sessionStorage.getItem('veltra_owner_unlocked') === 'true');
+    currentProfile.isLoggedIn &&
+    currentProfile.email.toLowerCase().trim() === 'devilkali131@gmail.com';
 
   const [isUnlocked, setIsUnlocked] = useState(isDefaultOwner);
   const [passcode, setPasscode] = useState('');
@@ -121,6 +118,8 @@ export const OwnerAccessPortalModal: React.FC<OwnerAccessPortalModalProps> = ({
   useEffect(() => {
     if (isDefaultOwner) {
       setIsUnlocked(true);
+    } else {
+      setIsUnlocked(false);
     }
   }, [isDefaultOwner, isOpen]);
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { INITIAL_TRACKS, INITIAL_PLAYLISTS } from './data/catalog';
-import { ActiveTab, DailyMix, EqualizerState, FriendActivity, Playlist, SonicPersona, Track } from './types/music';
+import { ActiveTab, DailyMix, EqualizerState, Playlist, SonicPersona, Track } from './types/music';
 import { audioEngine } from './services/audioEngine';
 import { offlineStorage, OfflineStorageStats } from './services/offlineStorage';
 import { mlService } from './services/mlService';
@@ -30,37 +30,6 @@ import { GoogleAuthImporterModal } from './components/GoogleAuthImporterModal';
 import { EqualizerModal } from './components/EqualizerModal';
 import { OwnerAccessPortalModal } from './components/OwnerAccessPortalModal';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
-
-const MOCK_FRIENDS: FriendActivity[] = [
-  {
-    id: 'friend-1',
-    userName: 'Maya Vance',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-    status: 'party',
-    currentTrackId: 'track-1',
-    progressPercent: 42,
-    startedAgo: '2m ago',
-    isPartyHost: true,
-  },
-  {
-    id: 'friend-2',
-    userName: 'Alex Thorne',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-    status: 'listening',
-    currentTrackId: 'track-3',
-    progressPercent: 68,
-    startedAgo: '5m ago',
-  },
-  {
-    id: 'friend-3',
-    userName: 'Elena Rostova',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
-    status: 'listening',
-    currentTrackId: 'track-7',
-    progressPercent: 15,
-    startedAgo: '12m ago',
-  },
-];
 
 export default function App() {
   // Navigation & View state
@@ -139,7 +108,7 @@ export default function App() {
       setIsSynthesizedFallback(!!event.isSynthesizedFallback);
 
       // Handle track completion
-      if (event.currentTime >= event.duration && event.duration > 0 && event.isPlaying) {
+      if (event.isEnded || (event.currentTime >= event.duration && event.duration > 0 && event.isPlaying)) {
         handleTrackEnded();
       }
     });
@@ -533,6 +502,7 @@ export default function App() {
               playlists={playlists}
               tracks={tracks}
               favoriteTrackIds={favoriteTrackIds}
+              downloadedTrackIds={downloadedTrackIds}
               historyTracks={historyTracks}
               currentTrackId={currentTrack?.id || null}
               isPlaying={isPlaying}
@@ -540,6 +510,17 @@ export default function App() {
               onSelectPlaylist={(p) => setSelectedPlaylist(p)}
               onCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
               onToggleLike={handleToggleLike}
+              onDownloadTrack={(track) => handleDownloadTrack(track)}
+              isDownloaded={(trackId) => isDownloaded(trackId)}
+              onDownloadAll={handleDownloadAll}
+              onOpenOfflineVault={() => {
+                setActiveTab('offline-vault');
+                setSelectedPlaylist(null);
+              }}
+              onOpenFavorites={() => {
+                setActiveTab('favorites');
+                setSelectedPlaylist(null);
+              }}
             />
           )}
         </main>
@@ -552,10 +533,6 @@ export default function App() {
             setSelectedPlaylist(null);
           }}
           onOpenMenuPopup={() => setIsBottomMenuOpen((prev) => !prev)}
-          onVoiceSearch={(transcript) => {
-            setSearchQuery(transcript);
-            setActiveTab('search');
-          }}
           isMenuOpen={isBottomMenuOpen}
           offlineCount={downloadedTrackIds.length}
         />
@@ -582,6 +559,7 @@ export default function App() {
           onOpenEqualizer={() => setIsEqualizerOpen(true)}
           onOpenApkModal={() => setIsApkModalOpen(true)}
           onOpenGoogleAuth={() => setIsGoogleAuthOpen(true)}
+          userProfile={userProfile}
         />
 
         {/* Docked Player Bar (Bottom) */}
@@ -609,6 +587,7 @@ export default function App() {
         onToggleMute={handleToggleMute}
         onToggleLike={() => currentTrack && handleToggleLike(currentTrack.id)}
         onDownloadTrack={() => currentTrack && handleDownloadTrack(currentTrack)}
+        onShareTrack={() => currentTrack && handleOpenShareTrack(currentTrack)}
         onToggleLyrics={() => setIsImmersiveOpen(true)}
         onToggleQueue={() => setIsQueueOpen(!isQueueOpen)}
         onExpandImmersive={() => setIsImmersiveOpen(true)}
@@ -638,6 +617,9 @@ export default function App() {
         onShareTrack={() => currentTrack && handleOpenShareTrack(currentTrack)}
         equalizer={equalizer}
         onEqualizerChange={handleEqualizerChange}
+        onDownloadTrack={() => currentTrack && handleDownloadTrack(currentTrack)}
+        isDownloaded={currentTrack ? isDownloaded(currentTrack.id) : false}
+        isDownloading={downloadingTrackId === currentTrack?.id}
       />
 
       {/* Social Share Modal */}
@@ -646,15 +628,20 @@ export default function App() {
         onClose={() => setIsShareModalOpen(false)}
         track={shareTargetTrack || currentTrack}
         playlist={shareTargetPlaylist}
+        onOpenListenTogether={() => setIsFriendDrawerOpen(true)}
       />
 
-      {/* Friend Activity Drawer */}
+      {/* Jam with Friends Drawer */}
       <FriendActivityDrawer
         isOpen={isFriendDrawerOpen}
         onClose={() => setIsFriendDrawerOpen(false)}
-        friends={MOCK_FRIENDS}
         tracks={tracks}
-        onListenAlong={handleListenAlong}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        onPlayTrack={handlePlayTrack}
+        onTogglePlay={handleTogglePlay}
+        userName={userProfile.name}
       />
 
       {/* Queue Drawer */}
@@ -710,6 +697,9 @@ export default function App() {
           setSelectedPlaylist(newPlaylist);
         }}
         availableTracks={tracks}
+        onProfileChange={(newProfile) => {
+          setUserProfile(newProfile);
+        }}
       />
 
       {/* Audio Equalizer Pop-up Modal with Prominent Close Cross Button */}

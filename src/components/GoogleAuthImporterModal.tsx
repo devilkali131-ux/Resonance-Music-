@@ -332,8 +332,9 @@ export const GoogleAuthImporterModal: React.FC<GoogleAuthImporterModalProps> = (
                   <span className="text-xs font-bold text-white">
                     {profile.isLoggedIn ? 'Switch to Another Account' : 'Sign in to Google Account'}
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {[
+                      { name: 'Owner', email: 'devilkali131@gmail.com' },
                       { name: 'Rishi Shrivastav', email: 'rishi.music@example.com' },
                       { name: 'Jagriti Shrivastav', email: 'jagriti.s@example.com' },
                       { name: 'Aaditya Sharma', email: 'aaditya.audio@example.com' },

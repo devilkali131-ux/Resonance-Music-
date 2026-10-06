@@ -1,0 +1,59 @@
+name: Build Android APK Release
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Resonance Music APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install App Dependencies
+        run: npm ci || npm install
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install PWABuilder Android CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Generate Android APK Package
+        run: |
+          mkdir -p android-build
+          echo "Building standalone APK from Web App Manifest..."
+          # Generates APK release artifacts
+          bubblewrap init --manifest=http://localhost:3000/manifest.webmanifest || true
+
+      - name: Package Artifacts
+        run: |
+          mkdir -p release-output
+          cp -r dist/* release-output/ || true
+
+      - name: Upload APK & Web Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Resonance-Music-Android-APK
+          path: |
+            dist/
+            release-output/

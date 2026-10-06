@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Zap,
   Globe,
+  Github,
   QrCode,
   ArrowRight,
 } from 'lucide-react';
@@ -29,6 +30,11 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
   const [isInstalling, setIsInstalling] = useState(false);
 
   if (!isOpen) return null;
+
+  // GitHub repository and APK release URLs
+  const githubRepoUrl = 'https://github.com/devilkali131/resonance-music';
+  const githubApkReleaseUrl = 'https://github.com/devilkali131/resonance-music/releases/latest';
+  const githubDirectApkUrl = 'https://github.com/devilkali131/resonance-music/releases/latest/download/Resonance-Music.apk';
 
   // The permanent live app URL for Resonance Music
   const appUrl =
@@ -136,13 +142,58 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
           </button>
         </div>
 
-        {/* Method 2: PWABuilder APK Generator Package */}
+        {/* Method 2: GitHub Repository & Direct APK Release */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-900/30 via-slate-900/60 to-cyan-950/30 border border-purple-500/40 space-y-3.5 shadow-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-purple-500 text-white font-black text-xs flex items-center justify-center">
+                  <Github className="w-4 h-4" />
+                </span>
+                <h4 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
+                  <span>GitHub Repository APK Release</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                    Latest v2.4.0
+                  </span>
+                </h4>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Download the pre-compiled Android <strong className="text-purple-300">Resonance-Music.apk</strong> package directly from our official GitHub repository releases, or browse the open-source code.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <a
+              href={githubDirectApkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download APK (~12MB)</span>
+            </a>
+
+            <a
+              href={githubRepoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/20 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Github className="w-4 h-4" />
+              <span>View GitHub Repo</span>
+              <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+            </a>
+          </div>
+        </div>
+
+        {/* Method 3: PWABuilder APK Generator Package */}
         <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-indigo-500 text-white font-black text-xs flex items-center justify-center">
-                  2
+                  3
                 </span>
                 <h4 className="text-sm sm:text-base font-extrabold text-white">
                   Download .APK Package (PWABuilder)

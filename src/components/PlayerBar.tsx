@@ -16,6 +16,7 @@ import {
   ListMusic,
   Radio,
   Sliders,
+  Share2,
 } from 'lucide-react';
 import { Track } from '../types/music';
 import { RealtimeVisualizer } from './RealtimeVisualizer';
@@ -45,6 +46,7 @@ interface PlayerBarProps {
   onToggleMute: () => void;
   onToggleLike: () => void;
   onDownloadTrack: () => void;
+  onShareTrack?: () => void;
   onToggleLyrics: () => void;
   onToggleQueue: () => void;
   onOpenEqualizer?: () => void;
@@ -84,6 +86,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   onToggleMute,
   onToggleLike,
   onDownloadTrack,
+  onShareTrack,
   onToggleLyrics,
   onToggleQueue,
   onOpenEqualizer,
@@ -238,6 +241,16 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           >
             <SkipForward className="w-4 h-4 fill-current" />
           </button>
+
+          {onShareTrack && (
+            <button
+              onClick={onShareTrack}
+              title="Share Track"
+              className="p-1.5 text-slate-400 hover:text-cyan-300 transition-colors"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          )}
 
           <button
             onClick={onExpandImmersive}
@@ -468,6 +481,17 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               className="w-16 h-1 bg-white/[0.1] rounded-full accent-cyan-400 cursor-pointer"
             />
           </div>
+
+          {/* Share Button (Desktop) */}
+          {onShareTrack && (
+            <button
+              onClick={onShareTrack}
+              title="Share Track"
+              className="p-2 text-slate-400 hover:text-cyan-300 hover:bg-white/[0.04] rounded-lg transition-colors"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Fullscreen Expand Button */}
           <button
