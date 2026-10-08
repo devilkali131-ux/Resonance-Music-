@@ -32,9 +32,9 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
   if (!isOpen) return null;
 
   // GitHub repository and APK release URLs
-  const githubRepoUrl = 'https://github.com/devilkali131/resonance-music';
-  const githubApkReleaseUrl = 'https://github.com/devilkali131/resonance-music/releases/latest';
-  const githubDirectApkUrl = 'https://github.com/devilkali131/resonance-music/releases/latest/download/Resonance-Music.apk';
+  const githubRepoUrl = 'https://github.com/devilkali131-ux/Resonance-Music-';
+  const githubApkReleaseUrl = 'https://github.com/devilkali131-ux/Resonance-Music-/releases/latest';
+  const githubDirectApkUrl = 'https://github.com/devilkali131-ux/Resonance-Music-/releases/latest/download/Resonance-Music.apk';
 
   // The permanent live app URL for Resonance Music
   const appUrl =

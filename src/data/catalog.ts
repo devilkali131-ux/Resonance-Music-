@@ -2,7 +2,45 @@ import { Track, Playlist } from '../types/music';
 
 export const INITIAL_TRACKS: Track[] = [
   // -------------------------------------------------------------
-  // FEATURED HINDI & PUNJABI HITS (Directly from User's Home Stream)
+  // #1 GLOBAL HIT WORLDWIDE (Current Top Billboard & Streaming Leader)
+  // -------------------------------------------------------------
+  {
+    id: 'global-die-with-a-smile',
+    title: 'Die With A Smile',
+    artist: 'Lady Gaga & Bruno Mars',
+    album: 'Die With A Smile Single',
+    duration: 251,
+    audioUrl: 'https://aac.saavncdn.com/881/68788317ea0f6111291958fc9aa1fced_160.mp4',
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/11/ae/f2/11aef294-f57c-bab9-c9fc-529162984e62/24UMGIM85348.rgb.jpg/600x600bb.jpg',
+    genre: 'Pop / Soul Ballad',
+    bpm: 79,
+    key: 'C major',
+    mood: 'Romance',
+    plays: 18500000,
+    downloadSizeMb: 6.8,
+    releaseYear: 2024,
+    accentColor: '#3b82f6',
+    source: 'youtube_music',
+    youtubeVideoId: 'kPa7bsKwL-8',
+    description: 'Current #1 Global Hit song worldwide topping Billboard Hot 100, Spotify Global & YouTube Music.',
+    lyrics: [
+      { time: 0, text: '♪ (Soulful electric guitar intro) ♪' },
+      { time: 13, text: 'I, I just woke up from a dream' },
+      { time: 20, text: 'Where you and I had to say goodbye' },
+      { time: 27, text: 'And I don\'t know what it all means' },
+      { time: 33, text: 'But since I survived, I realized...' },
+      { time: 41, text: 'Wherever you go, that\'s where I will follow' },
+      { time: 48, text: 'Nobody\'s promised tomorrow' },
+      { time: 54, text: 'So I\'ma love you every night like it\'s the last night' },
+      { time: 61, text: 'Like it\'s the last night!' },
+      { time: 68, text: 'If the world was ending, I\'d wanna be next to you' },
+      { time: 82, text: 'If the party was over and our time on Earth was through...' },
+      { time: 95, text: 'I\'d wanna hold you just for a while' },
+      { time: 104, text: 'And die with a smile!' },
+    ],
+  },
+  // -------------------------------------------------------------
+  // FEATURED HINDI & PUNJABI HITS (Directly from User\'s Home Stream)
   // -------------------------------------------------------------
   {
     id: 'hindi-ek-raat',

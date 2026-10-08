@@ -74,17 +74,49 @@ class AudioEngine {
       this.isPlaying = false;
       this.notify(true);
     });
-    this.audio.addEventListener('error', (e) => {
-      console.warn('Audio streaming encountered issue:', e);
-      if (this.audio && this.audio.crossOrigin) {
-        this.audio.crossOrigin = null;
-        if (this.currentTrack?.audioUrl) {
-          this.audio.src = this.currentTrack.audioUrl;
-          this.audio.play().catch(() => {});
-          return;
+    this.audio.addEventListener('error', async () => {
+      console.warn('Audio streaming encountered element error on src:', this.audio?.src);
+      if (!this.currentTrack) return;
+
+      // 1. Attempt proxy recovery
+      if (this.currentTrack.audioUrl && !this.audio?.src.includes('/api/external/proxy-audio')) {
+        try {
+          if (this.audio) {
+            this.audio.src = `/api/external/proxy-audio?url=${encodeURIComponent(this.currentTrack.audioUrl)}`;
+            await this.audio.play();
+            this.isPlaying = true;
+            this.notify();
+            return;
+          }
+        } catch (e) {
+          console.warn('Proxy recovery failed:', e);
         }
       }
-      if (this.currentTrack && !navigator.onLine) {
+
+      // 2. Attempt dynamic resolve-audio
+      try {
+        const res = await fetch(
+          `/api/external/resolve-audio?title=${encodeURIComponent(this.currentTrack.title)}&artist=${encodeURIComponent(
+            this.currentTrack.artist
+          )}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.audioUrl && this.audio) {
+            this.currentTrack.audioUrl = data.audioUrl;
+            if (data.coverUrl) this.currentTrack.coverUrl = data.coverUrl;
+            this.audio.src = data.audioUrl;
+            await this.audio.play();
+            this.isPlaying = true;
+            this.notify();
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Auto resolve recovery failed:', e);
+      }
+
+      if (!navigator.onLine && this.currentTrack) {
         this.startProceduralSynth(this.currentTrack);
       }
     });
@@ -279,6 +311,14 @@ class AudioEngine {
 
   private async playAudioElement(track: Track, startTime = 0) {
     if (!this.audio) return;
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        await this.audioCtx.resume();
+      } catch {
+        // user interaction pending
+      }
+    }
+
     try {
       this.audio.volume = this.isMuted ? 0 : this.volume;
       if (track.audioUrl && !track.audioUrl.includes('soundhelix') && !track.audioUrl.includes('freesound.org')) {
@@ -292,6 +332,22 @@ class AudioEngine {
       throw new Error('Need online audio resolution');
     } catch (err) {
       console.warn('Primary audio stream playback notice, resolving live online stream:', err);
+
+      // Try proxied stream if audioUrl exists
+      if (track.audioUrl && !track.audioUrl.startsWith('/api/external/proxy-audio')) {
+        try {
+          const proxied = `/api/external/proxy-audio?url=${encodeURIComponent(track.audioUrl)}`;
+          this.audio.src = proxied;
+          this.audio.currentTime = startTime;
+          await this.audio.play();
+          this.isPlaying = true;
+          this.notify();
+          return;
+        } catch (proxyErr) {
+          console.warn('Proxy playback attempt failed:', proxyErr);
+        }
+      }
+
       try {
         const resolveRes = await fetch(
           `/api/external/resolve-audio?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(
@@ -405,6 +461,13 @@ class AudioEngine {
 
   public async togglePlay() {
     this.ensureAudioContext();
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        await this.audioCtx.resume();
+      } catch {
+        // ignore
+      }
+    }
 
     if (this.isSynthesizing) {
       if (this.isPlaying) {

@@ -200,6 +200,56 @@ export default function App() {
     initML();
   }, []);
 
+  // Auto-sync function to dynamically keep songs, Global Hits, and trending music fresh in background
+  const syncGlobalHitsAndTrending = useCallback(async () => {
+    try {
+      const [homeData, extTrending] = await Promise.all([
+        externalMusicService.getHomeMusic(),
+        externalMusicService.getTrendingTracks(),
+      ]);
+
+      const allIncoming = [
+        ...(homeData?.trending || []),
+        ...(homeData?.newMusic || []),
+        ...(extTrending || []),
+      ];
+
+      if (allIncoming.length > 0) {
+        setTracks((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const existingKey = new Set(
+            prev.map((t) => `${t.title.toLowerCase().trim()}:::${t.artist.toLowerCase().trim()}`)
+          );
+          const newUnique = allIncoming.filter(
+            (t) =>
+              !existingIds.has(t.id) &&
+              !existingKey.has(`${t.title.toLowerCase().trim()}:::${t.artist.toLowerCase().trim()}`)
+          );
+          if (newUnique.length === 0) return prev;
+          return [...prev, ...newUnique];
+        });
+      }
+    } catch (e) {
+      console.warn('Auto sync global hits notice:', e);
+    }
+  }, []);
+
+  // Periodic automatic sync: runs on start, every 3 minutes, and when app becomes visible
+  useEffect(() => {
+    syncGlobalHitsAndTrending();
+    const interval = setInterval(syncGlobalHitsAndTrending, 180000);
+    const handleVisChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncGlobalHitsAndTrending();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisChange);
+    };
+  }, [syncGlobalHitsAndTrending]);
+
   // Update storage stats when downloads change
   useEffect(() => {
     setStorageStats(offlineStorage.getStorageStats(tracks));
@@ -564,9 +614,11 @@ export default function App() {
           ) : activeTab === 'discover' || activeTab === 'search' ? (
             <DiscoverView
               tracks={tracks}
+              playlists={playlists}
               currentTrackId={currentTrack?.id || null}
               isPlaying={isPlaying}
               onPlayTrack={handlePlayTrack}
+              onSelectPlaylist={(p) => setSelectedPlaylist(p)}
               onToggleLike={handleToggleLike}
               onDownloadTrack={handleDownloadTrack}
               onShareTrack={handleOpenShareTrack}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Heart,
   CheckCircle2,
@@ -11,12 +11,12 @@ import {
   Pin,
   Music,
   Play,
-  ArrowUpDown,
   ChevronUp,
-  Sparkles,
+  User,
+  Disc,
 } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
-import { historyStorage } from '../services/historyStorage';
+import { handleImageError } from '../utils/imageFallback';
 
 interface LibraryViewProps {
   viewMode?: 'library' | 'favorites' | 'history';
@@ -39,13 +39,14 @@ interface LibraryViewProps {
   onRequireLogin?: () => void;
 }
 
-type LibraryFilter = 'Playlists' | 'Songs' | 'Albums' | 'Artists' | 'Local';
+// "Songs" removed per user request
+type LibraryFilter = 'Playlists' | 'Albums' | 'Artists' | 'Local';
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   viewMode = 'library',
-  playlists,
-  tracks,
-  favoriteTrackIds,
+  playlists = [],
+  tracks = [],
+  favoriteTrackIds = [],
   downloadedTrackIds = [],
   currentTrackId,
   isPlaying,
@@ -56,7 +57,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onDownloadTrack,
   isDownloaded = () => false,
   onDownloadAll,
-  onOpenFavorites,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<LibraryFilter>('Playlists');
   const [sortAscending, setSortAscending] = useState(true);
@@ -67,7 +67,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const FILTERS: LibraryFilter[] = ['Playlists', 'Songs', 'Albums', 'Artists', 'Local'];
+  // Top Category Filters (Songs removed)
+  const FILTERS: LibraryFilter[] = ['Playlists', 'Albums', 'Artists', 'Local'];
 
   const handleLikedClick = () => {
     const likedPlaylist: Playlist = {
@@ -107,6 +108,87 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       handleLikedClick();
     }
   }, [viewMode]);
+
+  // Grouped Albums
+  const albumList = useMemo(() => {
+    const map = new Map<string, { name: string; artist: string; coverUrl: string; tracks: Track[] }>();
+    (tracks || []).forEach((t) => {
+      if (!t) return;
+      const albumName = t.album || t.title || 'Unknown Album';
+      if (!map.has(albumName)) {
+        map.set(albumName, {
+          name: albumName,
+          artist: t.artist || 'Unknown Artist',
+          coverUrl: t.coverUrl || '',
+          tracks: [],
+        });
+      }
+      map.get(albumName)!.tracks.push(t);
+    });
+    const list = Array.from(map.values());
+    return sortAscending
+      ? list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      : list.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+  }, [tracks, sortAscending]);
+
+  // Grouped Artists
+  const artistList = useMemo(() => {
+    const map = new Map<string, { name: string; coverUrl: string; tracks: Track[] }>();
+    (tracks || []).forEach((t) => {
+      if (!t) return;
+      const artistName = t.artist || 'Unknown Artist';
+      if (!map.has(artistName)) {
+        map.set(artistName, {
+          name: artistName,
+          coverUrl: t.coverUrl || '',
+          tracks: [],
+        });
+      }
+      map.get(artistName)!.tracks.push(t);
+    });
+    const list = Array.from(map.values());
+    return sortAscending
+      ? list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      : list.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+  }, [tracks, sortAscending]);
+
+  // Filtered Local/Downloaded Tracks
+  const localTracks = useMemo(() => {
+    const ids = new Set(downloadedTrackIds || []);
+    return (tracks || []).filter((t) => t && ids.has(t.id));
+  }, [tracks, downloadedTrackIds]);
+
+  const handleAlbumClick = (album: { name: string; artist: string; coverUrl: string; tracks: Track[] }) => {
+    const albumPlaylist: Playlist = {
+      id: `album-${encodeURIComponent(album.name)}`,
+      name: album.name,
+      description: `Album by ${album.artist} • ${album.tracks.length} songs`,
+      tagline: album.artist,
+      coverUrl: album.coverUrl,
+      accentColor: album.tracks[0]?.accentColor || '#38bdf8',
+      trackIds: album.tracks.map((t) => t.id),
+      isAiGenerated: false,
+      createdAt: 'Album',
+      playCount: album.tracks.reduce((sum, t) => sum + (t.plays || 0), 0),
+    };
+    onSelectPlaylist(albumPlaylist);
+  };
+
+  const handleArtistClick = (artist: { name: string; coverUrl: string; tracks: Track[] }) => {
+    const artistPlaylist: Playlist = {
+      id: `artist-${encodeURIComponent(artist.name)}`,
+      name: artist.name,
+      description: `Top tracks and discography by ${artist.name} • ${artist.tracks.length} songs`,
+      tagline: 'Artist Collection',
+      coverUrl: artist.coverUrl,
+      accentColor: artist.tracks[0]?.accentColor || '#ec4899',
+      trackIds: artist.tracks.map((t) => t.id),
+      isAiGenerated: false,
+      createdAt: 'Artist Discography',
+      playCount: artist.tracks.reduce((sum, t) => sum + (t.plays || 0), 0),
+    };
+    onSelectPlaylist(artistPlaylist);
+  };
 
   // 8 Grid Shortcut Cards matching user screenshot
   const gridCards = [
@@ -213,6 +295,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               key={idx}
               src={t.coverUrl}
               alt=""
+              onError={handleImageError}
               className="w-full h-full object-cover"
             />
           ))}
@@ -225,6 +308,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <img
           src={list[0].coverUrl}
           alt=""
+          onError={handleImageError}
           className="w-full h-full object-cover"
         />
       );
@@ -238,8 +322,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-40 select-none animate-fadeIn">
-      {/* 1. Filter Chips Row matching screenshot (Playlists, Songs, Albums, Artists, Local) */}
+    <div className="space-y-6 pb-44 select-none animate-fadeIn">
+      {/* 1. Category Filter Chips (Playlists, Albums, Artists, Local - Songs removed per user request) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
         {FILTERS.map((f) => {
           const isSelected = selectedFilter === f;
@@ -265,7 +349,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           onClick={() => setSortAscending(!sortAscending)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-[#1c1e28] hover:bg-[#252835] text-xs font-semibold text-slate-200 border border-white/[0.08] transition-all cursor-pointer shadow-sm"
         >
-          <span>Date added</span>
+          <span>Sort {sortAscending ? 'A-Z' : 'Z-A'}</span>
         </button>
 
         <button
@@ -316,126 +400,185 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
 
-      {/* 4. Content Section: Songs vs Playlists depending on Filter */}
-      {selectedFilter === 'Songs' ? (
+      {/* 4. DYNAMIC CATEGORY VIEWS (Playlists, Albums, Artists, Local) */}
+      
+      {/* A. ALBUMS CATEGORY VIEW */}
+      {selectedFilter === 'Albums' && (
         <div className="pt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              All Songs ({tracks.length})
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Disc className="w-5 h-5 text-cyan-400" />
+              <span>Albums ({albumList.length})</span>
             </h3>
-            {onDownloadAll && (
-              <button
-                onClick={() => {
-                  onDownloadAll();
-                  showNotification(`Downloading all ${tracks.length} tracks into device offline cache...`);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 text-xs font-bold transition-all cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download All</span>
-              </button>
-            )}
           </div>
 
-          <div className="divide-y divide-white/[0.04] bg-white/[0.02] rounded-2xl border border-white/[0.06] overflow-hidden">
-            {tracks.map((track, i) => {
-              const isCurrent = currentTrackId === track.id;
-              const liked = favoriteTrackIds.includes(track.id);
-              const downloaded = isDownloaded(track.id);
-
-              return (
-                <div
-                  key={track.id}
-                  className={`group flex items-center justify-between px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] transition-colors ${
-                    isCurrent ? 'bg-cyan-500/10' : ''
-                  }`}
-                >
-                  <div
-                    onClick={() => onPlayTrack(track)}
-                    className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
-                  >
-                    <span className="w-5 text-center text-xs font-mono text-slate-500 group-hover:hidden">
-                      {i + 1}
-                    </span>
-                    <span className="hidden group-hover:flex w-5 h-5 items-center justify-center text-cyan-400">
-                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                    </span>
-
-                    <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.1]">
-                      <img
-                        src={track.coverUrl}
-                        alt={track.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                      {downloaded && (
-                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <h4
-                        className={`text-sm font-bold truncate ${
-                          isCurrent ? 'text-cyan-300' : 'text-slate-100'
-                        }`}
-                      >
-                        {track.title}
-                      </h4>
-                      <p className="text-xs text-slate-400 truncate mt-0.5">{track.artist}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                    <span className="hidden sm:inline text-xs font-mono text-slate-400 w-12 text-right">
-                      {Math.floor(track.duration / 60)}:
-                      {(track.duration % 60).toString().padStart(2, '0')}
-                    </span>
-
-                    <button
-                      onClick={() => onToggleLike(track.id)}
-                      className="p-1.5 text-slate-400 hover:text-pink-400 transition-colors cursor-pointer"
-                      title={liked ? 'Unlike' : 'Like'}
-                    >
-                      <Heart
-                        className={`w-4 h-4 ${liked ? 'fill-pink-500 text-pink-500' : ''}`}
-                      />
-                    </button>
-
-                    {/* Prominent Working Download Button in Library */}
-                    {onDownloadTrack && (
-                      <button
-                        onClick={() => onDownloadTrack(track)}
-                        title={downloaded ? 'Saved in Downloaded Music' : 'Download track for offline listening'}
-                        className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                          downloaded
-                            ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
-                            : 'text-slate-400 hover:text-cyan-300 hover:bg-white/[0.08]'
-                        }`}
-                      >
-                        {downloaded ? (
-                          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                        ) : (
-                          <Download className="w-4 h-4 stroke-[2]" />
-                        )}
-                      </button>
-                    )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {albumList.map((album) => (
+              <div
+                key={album.name}
+                onClick={() => handleAlbumClick(album)}
+                className="group cursor-pointer space-y-2.5 p-3 rounded-2xl bg-[#141622]/80 hover:bg-white/[0.06] border border-white/[0.08] hover:border-cyan-400/40 transition-all shadow-md"
+              >
+                <div className="relative aspect-square rounded-xl overflow-hidden shadow-md border border-white/[0.08]">
+                  <img
+                    src={album.coverUrl}
+                    alt={album.name}
+                    onError={handleImageError}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="w-6 h-6 text-white fill-current ml-0.5" />
                   </div>
                 </div>
-              );
-            })}
+                <div>
+                  <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
+                    {album.name}
+                  </h4>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">
+                    {album.artist} • {album.tracks.length} tracks
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      ) : (
-        /* Playlists Showcase Section */
+      )}
+
+      {/* B. ARTISTS CATEGORY VIEW */}
+      {selectedFilter === 'Artists' && (
+        <div className="pt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <User className="w-5 h-5 text-purple-400" />
+              <span>Artists ({artistList.length})</span>
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {artistList.map((artist) => (
+              <div
+                key={artist.name}
+                onClick={() => handleArtistClick(artist)}
+                className="group cursor-pointer space-y-3 p-4 rounded-2xl bg-[#141622]/80 hover:bg-white/[0.06] border border-white/[0.08] hover:border-purple-400/40 transition-all shadow-md text-center flex flex-col items-center"
+              >
+                <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-lg border-2 border-white/15 group-hover:border-purple-400/60 transition-colors">
+                  <img
+                    src={artist.coverUrl}
+                    alt={artist.name}
+                    onError={handleImageError}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                </div>
+                <div className="w-full">
+                  <h4 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors truncate">
+                    {artist.name}
+                  </h4>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">
+                    {artist.tracks.length} songs
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* C. LOCAL CATEGORY VIEW */}
+      {selectedFilter === 'Local' && (
+        <div className="pt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Folder className="w-5 h-5 text-emerald-400" />
+              <span>Local Offline Songs ({localTracks.length})</span>
+            </h3>
+          </div>
+
+          {localTracks.length === 0 ? (
+            <div className="p-8 text-center rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-2">
+              <Folder className="w-8 h-8 text-slate-500 mx-auto" />
+              <p className="text-sm font-semibold text-slate-300">No songs downloaded yet</p>
+              <p className="text-xs text-slate-500">Tap the download icon on any song to save it for offline playback.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.04] bg-white/[0.02] rounded-2xl border border-white/[0.06] overflow-hidden">
+              {localTracks.map((track, i) => {
+                const isCurrent = currentTrackId === track.id;
+                const liked = favoriteTrackIds.includes(track.id);
+
+                return (
+                  <div
+                    key={track.id}
+                    className={`group flex items-center justify-between px-4 sm:px-5 py-3.5 hover:bg-white/[0.04] transition-colors ${
+                      isCurrent ? 'bg-cyan-500/10' : ''
+                    }`}
+                  >
+                    <div
+                      onClick={() => onPlayTrack(track)}
+                      className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
+                    >
+                      <span className="w-5 text-center text-xs font-mono text-slate-500 group-hover:hidden">
+                        {i + 1}
+                      </span>
+                      <span className="hidden group-hover:flex w-5 h-5 items-center justify-center text-cyan-400">
+                        <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                      </span>
+
+                      <div className="relative w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.1]">
+                        <img
+                          src={track.coverUrl}
+                          alt={track.title}
+                          onError={handleImageError}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          className={`text-sm font-bold truncate ${
+                            isCurrent ? 'text-cyan-300' : 'text-slate-100'
+                          }`}
+                        >
+                          {track.title}
+                        </h4>
+                        <p className="text-xs text-slate-400 truncate mt-0.5">{track.artist}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                      <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-400/30">
+                        Downloaded
+                      </span>
+                      <button
+                        onClick={() => onToggleLike(track.id)}
+                        className="p-1.5 text-slate-400 hover:text-pink-400 transition-colors cursor-pointer"
+                        title={liked ? 'Unlike' : 'Like'}
+                      >
+                        <Heart
+                          className={`w-4 h-4 ${liked ? 'fill-pink-500 text-pink-500' : ''}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* D. PLAYLISTS CATEGORY VIEW (Default) */}
+      {selectedFilter === 'Playlists' && (
         <div className="pt-4 space-y-4 relative">
           <div className="flex items-center justify-between">
             <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Playlists
+              Playlists ({playlists.length + 1})
             </h3>
           </div>
 
-          {/* Playlists 2-Column Grid matching screenshot */}
+          {/* Playlists Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {/* Dedicated Downloaded Music Playlist Card in Library section */}
+            {/* Dedicated Downloaded Music Playlist Card */}
             <div
               onClick={handleDownloadedClick}
               className="group cursor-pointer space-y-2.5"
@@ -471,12 +614,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   onClick={() => onSelectPlaylist(playlist)}
                   className="group cursor-pointer space-y-2.5"
                 >
-                  {/* 2x2 Collage Artwork thumbnail container */}
                   <div className="relative aspect-square rounded-2xl overflow-hidden shadow-lg border border-white/[0.08] bg-[#171922] group-hover:scale-[1.02] transition-transform">
                     {renderCollage(playlist.trackIds)}
                   </div>
 
-                  {/* Playlist Info */}
                   <div>
                     <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
                       {playlist.name}

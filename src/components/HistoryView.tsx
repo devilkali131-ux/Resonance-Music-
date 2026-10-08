@@ -12,6 +12,7 @@ import {
 import { Track } from '../types/music';
 import { historyStorage, HistoryItem } from '../services/historyStorage';
 import { AmbientArtGlow } from './AmbientArtGlow';
+import { handleImageError } from '../utils/imageFallback';
 
 interface HistoryViewProps {
   currentTrackId: string | null;
@@ -121,6 +122,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       <img
                         src={track.coverUrl}
                         alt={track.title}
+                        onError={handleImageError}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                       <div

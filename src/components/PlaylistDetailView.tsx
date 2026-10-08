@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
+import { handleImageError } from '../utils/imageFallback';
 
 interface PlaylistDetailViewProps {
   playlist: Playlist;
@@ -155,6 +156,7 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
                 <img
                   src={track.coverUrl}
                   alt={track.title}
+                  onError={handleImageError}
                   className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                 />
 

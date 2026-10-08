@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, ListMusic, Play, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { Track } from '../types/music';
+import { handleImageError } from '../utils/imageFallback';
 
 interface QueueDrawerProps {
   isOpen: boolean;
@@ -68,6 +69,7 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
               <img
                 src={currentTrack.coverUrl}
                 alt={currentTrack.title}
+                onError={handleImageError}
                 className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
               />
               <div className="flex-1 min-w-0">
@@ -104,6 +106,7 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
                     <img
                       src={track.coverUrl}
                       alt={track.title}
+                      onError={handleImageError}
                       className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
                     />
                     <div className="min-w-0">

@@ -21,6 +21,7 @@ import {
 import { EqualizerState, Playlist, Track } from '../types/music';
 import { AmbientArtGlow } from './AmbientArtGlow';
 import { extractDominantPalette, TrackPalette } from '../utils/colorExtractor';
+import { handleImageError } from '../utils/imageFallback';
 
 interface ImmersivePlayerModalProps {
   isOpen: boolean;
@@ -302,6 +303,7 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
               <img
                 src={track.coverUrl}
                 alt={track.title}
+                onError={handleImageError}
                 className={`w-full h-full object-cover transition-transform duration-700 ${getTrackCoverAnimation(
                   track,
                   isPlaying

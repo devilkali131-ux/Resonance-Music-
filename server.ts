@@ -818,6 +818,64 @@ app.get('/api/external/resolve-audio', async (req: Request, res: Response) => {
   return res.json({ audioUrl: null, coverUrl: null });
 });
 
+// Endpoint to proxy audio streams with CORS and Range headers for seamless playback & Web Audio
+app.get('/api/external/proxy-audio', async (req: Request, res: Response) => {
+  const audioUrl = req.query.url as string;
+  if (!audioUrl) {
+    return res.status(400).send('URL query parameter required');
+  }
+
+  try {
+    const range = req.headers.range;
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    };
+    if (range) {
+      headers['Range'] = range;
+    }
+
+    const upstream = await fetch(audioUrl, { headers });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Origin, Content-Type');
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    if (upstream.headers.has('content-type')) {
+      res.setHeader('Content-Type', upstream.headers.get('content-type')!);
+    }
+    if (upstream.headers.has('content-length')) {
+      res.setHeader('Content-Length', upstream.headers.get('content-length')!);
+    }
+    if (upstream.headers.has('content-range')) {
+      res.setHeader('Content-Range', upstream.headers.get('content-range')!);
+    }
+
+    res.status(upstream.status);
+
+    if (upstream.body) {
+      const reader = upstream.body.getReader();
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } catch {
+          res.end();
+        }
+      };
+      pump();
+    } else {
+      res.end();
+    }
+  } catch (err: any) {
+    console.warn('Audio proxy upstream fetch error:', err?.message);
+    res.status(502).send('Error proxying audio');
+  }
+});
+
 // YouTube Music & Spotify Live Search endpoint (Powered by real high-res online audio streaming & covers)
 app.get('/api/external/search', async (req: Request, res: Response) => {
   try {

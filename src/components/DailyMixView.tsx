@@ -14,6 +14,7 @@ import {
 import { Track } from '../types/music';
 import { historyStorage, UserProfile } from '../services/historyStorage';
 import { AmbientArtGlow } from './AmbientArtGlow';
+import { handleImageError } from '../utils/imageFallback';
 
 interface DailyMixViewProps {
   tracks: Track[];
@@ -167,6 +168,58 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
         </button>
       </div>
 
+      {/* 🌟 SPOTLIGHT #1 GLOBAL HIT SONG ON TOP (Currently Top Worldwide) */}
+      {trendingTracks[0] && (
+        <section className="relative overflow-hidden rounded-3xl border border-amber-500/40 p-4 sm:p-5 bg-gradient-to-r from-amber-950/40 via-[#0e1222]/85 to-purple-950/40 shadow-2xl">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <div
+                className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex-shrink-0 group cursor-pointer"
+                onClick={() => onPlayTrack(trendingTracks[0])}
+              >
+                <img
+                  src={trendingTracks[0].coverUrl}
+                  alt={trendingTracks[0].title}
+                  onError={handleImageError}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Play className="w-7 h-7 text-white fill-current ml-0.5" />
+                </div>
+              </div>
+
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-md">
+                    <Flame className="w-3 h-3 fill-slate-950" /> #1 Global Hit Song
+                  </span>
+                  <span className="text-[10px] font-mono text-cyan-300 px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/20">
+                    Currently on Top
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
+                  {trendingTracks[0].title}
+                </h2>
+                <p className="text-xs text-slate-300 font-medium truncate">
+                  {trendingTracks[0].artist} · {trendingTracks[0].genre}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                onClick={() => onPlayTrack(trendingTracks[0])}
+                className="py-2.5 px-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-400/25 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-current ml-0.5" />
+                <span>Play #1 Global Hit</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 2. Hero Featured Carousel */}
       <section className="relative">
         <div className="flex items-center gap-4 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory">
@@ -182,6 +235,7 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                 <img
                   src={track.coverUrl}
                   alt={track.title}
+                  onError={handleImageError}
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
 
@@ -280,6 +334,7 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                     <img
                       src={track.coverUrl}
                       alt={track.title}
+                      onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <div
@@ -367,6 +422,7 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                     <img
                       src={track.coverUrl}
                       alt={track.title}
+                      onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </AmbientArtGlow>
@@ -433,6 +489,7 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                     <img
                       src={track.coverUrl}
                       alt={track.title}
+                      onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <div
@@ -505,6 +562,7 @@ export const DailyMixView: React.FC<DailyMixViewProps> = ({
                     <img
                       src={track.coverUrl}
                       alt={track.title}
+                      onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>

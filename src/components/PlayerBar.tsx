@@ -8,6 +8,7 @@ import {
   ListMusic,
 } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
+import { handleImageError } from '../utils/imageFallback';
 
 interface PlayerBarProps {
   currentTrack: Track | null;
@@ -67,8 +68,14 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
 
   return (
     <div className="fixed bottom-16 sm:bottom-18 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.25rem)] sm:w-[calc(100%-2rem)] max-w-xl select-none animate-fadeIn transition-all">
-      {/* Floating Capsule Player Container matching user's screenshot */}
-      <div className="relative rounded-full bg-[#141622]/95 border border-white/[0.14] backdrop-blur-2xl shadow-2xl shadow-black/95 px-3 py-2 flex items-center justify-between gap-3 overflow-hidden group">
+      {/* Floating Animated Capsule Player Container */}
+      <div
+        className={`relative rounded-full bg-[#131522]/95 border backdrop-blur-2xl px-3.5 py-2 flex items-center justify-between gap-3 overflow-hidden group transition-all duration-500 hover:-translate-y-0.5 ${
+          isPlaying
+            ? 'border-cyan-500/35 shadow-[0_14px_45px_rgba(0,0,0,0.92),0_0_28px_rgba(6,182,212,0.25)] ring-1 ring-cyan-400/20'
+            : 'border-white/[0.14] shadow-2xl shadow-black/95'
+        }`}
+      >
         
         {/* Subtle Progress Bar along top edge of capsule */}
         <div className="absolute top-0 inset-x-6 h-[2.5px] bg-white/[0.08] overflow-hidden rounded-full">
@@ -107,6 +114,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <img
               src={currentTrack.coverUrl}
               alt={currentTrack.title}
+              onError={handleImageError}
               className={`w-full h-full object-cover transition-transform duration-700 ${
                 isPlaying ? 'animate-[spin_12s_linear_infinite]' : ''
               }`}
@@ -129,6 +137,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               <p className="text-[11px] text-slate-400 truncate">
                 {currentTrack.artist}
               </p>
+              {isPlaying && (
+                <div className="flex items-end gap-[2.5px] h-3 ml-1 flex-shrink-0" title="Now playing">
+                  <span className="w-[2.5px] h-2 bg-cyan-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite]" />
+                  <span className="w-[2.5px] h-3 bg-cyan-300 rounded-full animate-[pulse_0.8s_ease-in-out_infinite_0.15s]" />
+                  <span className="w-[2.5px] h-1.5 bg-cyan-400 rounded-full animate-[pulse_0.5s_ease-in-out_infinite_0.3s]" />
+                </div>
+              )}
               {playingPlaylist && (
                 <span className="hidden xs:inline-block text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/20 truncate max-w-[90px]">
                   {playingPlaylist.name}
@@ -172,7 +187,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           >
             <span
               className={`transition-all duration-300 transform flex items-center justify-center ${
-                isPlaying ? 'scale-100 rotate-0' : 'scale-110 rotate-180 ml-0.5'
+                isPlaying ? 'scale-100 rotate-0' : 'scale-105 rotate-0 ml-0.5'
               }`}
             >
               {isPlaying ? (
