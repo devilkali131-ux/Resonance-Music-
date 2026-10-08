@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
 import { handleImageError } from '../utils/imageFallback';
+import { RealtimeVisualizer } from './RealtimeVisualizer';
 
 interface PlayerBarProps {
   currentTrack: Track | null;
@@ -151,6 +152,17 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Studio Mini Visualizer (Middle on larger viewports) */}
+        <div className="hidden lg:flex items-center px-4 w-32 xl:w-44 flex-shrink-0 cursor-pointer" onClick={onExpandImmersive} title="Studio Frequency Visualizer - Click for Fullscreen">
+          <RealtimeVisualizer
+            isPlaying={isPlaying}
+            accentColor={currentTrack.accentColor || '#38bdf8'}
+            height={22}
+            interactive={false}
+            showHUD={false}
+          />
         </div>
 
         {/* Right Side: Basic Action Controls (Playlist if active, Previous, Animated Play/Pause, Next, Share) */}

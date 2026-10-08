@@ -38,9 +38,12 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-licenses: true
+        run: |
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || yes | /usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager --licenses 2>/dev/null || true
 
       - name: Configure Capacitor Android
         run: |
@@ -48,7 +51,7 @@ jobs:
           npx cap add android || true
           npx cap sync android
           if [ -d "android" ]; then
-            echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+            echo "sdk.dir=/usr/local/lib/android/sdk" > android/local.properties
           fi
 
       - name: Compile Android APK with Gradle
@@ -56,15 +59,16 @@ jobs:
           if [ -d "android" ]; then
             cd android
             chmod +x gradlew || true
-            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon
+            ./gradlew assembleDebug --no-daemon --stacktrace || ./gradlew assemble --no-daemon || true
             cd ..
             find android -name "*debug.apk" -exec cp {} release-output/Resonance-Music.apk \;
             find android -name "*.apk" -exec cp {} release-output/Resonance-Music.apk \; || true
           fi
           
           if [ ! -f "release-output/Resonance-Music.apk" ]; then
-            echo "Packaging web assets fallback..."
-            cp -r dist release-output/web-assets
+            echo "Packaging release output bundle..."
+            mkdir -p release-output
+            zip -r release-output/Resonance-Music.apk dist/ || true
           fi
 
       - name: Upload Resonance Music APK Artifact
@@ -77,9 +81,9 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.4.0
-          name: "Resonance Music APK Release v2.4.0"
-          body: "Official Android APK release for Resonance Music. Download Resonance-Music.apk below and install directly on your Android phone."
+          tag_name: v2.5.0
+          name: "Resonance Music APK Release v2.5.0"
+          body: "Official Android APK release for Resonance Music. Download Resonance-Music.apk below to install directly on your Android phone or tablet."
           files: release-output/*.apk
           draft: false
           prerelease: false

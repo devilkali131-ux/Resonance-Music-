@@ -362,7 +362,7 @@ export default function App() {
   };
 
   // Previous & Next Track
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (currentTime > 4) {
       audioEngine.seek(0);
       return;
@@ -370,9 +370,9 @@ export default function App() {
     const idx = tracks.findIndex((t) => t.id === currentTrack?.id);
     const prevIdx = idx > 0 ? idx - 1 : tracks.length - 1;
     handlePlayTrack(tracks[prevIdx]);
-  };
+  }, [currentTime, tracks, currentTrack?.id, handlePlayTrack]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (queue.length > 0) {
       const nextTrack = queue[0];
       setQueue((prev) => prev.slice(1));
@@ -389,7 +389,15 @@ export default function App() {
     const idx = tracks.findIndex((t) => t.id === currentTrack?.id);
     const nextIdx = (idx + 1) % tracks.length;
     handlePlayTrack(tracks[nextIdx]);
-  };
+  }, [queue, isShuffle, tracks, currentTrack?.id, handlePlayTrack]);
+
+  // Sync transport handlers with MediaSession (notification bar & lock screen next/prev buttons)
+  useEffect(() => {
+    audioEngine.setTransportCallbacks({
+      onNext: handleNext,
+      onPrevious: handlePrevious,
+    });
+  }, [handleNext, handlePrevious]);
 
   const handleTrackEnded = () => {
     if (isRepeat && currentTrack) {

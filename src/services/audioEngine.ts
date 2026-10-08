@@ -121,6 +121,14 @@ class AudioEngine {
     });
   }
 
+  private onNextCallback: (() => void) | null = null;
+  private onPreviousCallback: (() => void) | null = null;
+
+  public setTransportCallbacks(callbacks: { onNext?: () => void; onPrevious?: () => void }) {
+    if (callbacks.onNext) this.onNextCallback = callbacks.onNext;
+    if (callbacks.onPrevious) this.onPreviousCallback = callbacks.onPrevious;
+  }
+
   private updateMediaSession(track: Track) {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator && track) {
       try {
@@ -142,6 +150,29 @@ class AudioEngine {
         navigator.mediaSession.setActionHandler('pause', () => {
           this.pause();
         });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          if (this.onPreviousCallback) {
+            this.onPreviousCallback();
+          } else {
+            this.seek(0);
+          }
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          if (this.onNextCallback) {
+            this.onNextCallback();
+          }
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          const cur = this.audio?.currentTime || 0;
+          this.seek(Math.max(0, cur - skipTime));
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          const cur = this.audio?.currentTime || 0;
+          const dur = this.currentTrack?.duration || 200;
+          this.seek(Math.min(dur, cur + skipTime));
+        });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
           if (details.seekTime !== undefined) {
             this.seek(details.seekTime);
@@ -149,6 +180,24 @@ class AudioEngine {
         });
       } catch {
         // Media session fallback
+      }
+    }
+  }
+
+  private updatePositionState() {
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+      try {
+        const dur = this.audio?.duration || this.currentTrack?.duration || 0;
+        const cur = this.audio?.currentTime || 0;
+        if (dur > 0 && cur >= 0 && cur <= dur) {
+          navigator.mediaSession.setPositionState({
+            duration: dur,
+            playbackRate: 1,
+            position: cur,
+          });
+        }
+      } catch {
+        // ignore
       }
     }
   }
@@ -887,6 +936,7 @@ class AudioEngine {
     if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
       try {
         navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
+        this.updatePositionState();
       } catch {
         // ignore
       }

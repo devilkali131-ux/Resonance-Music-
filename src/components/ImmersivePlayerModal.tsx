@@ -22,6 +22,7 @@ import { EqualizerState, Playlist, Track } from '../types/music';
 import { AmbientArtGlow } from './AmbientArtGlow';
 import { extractDominantPalette, TrackPalette } from '../utils/colorExtractor';
 import { handleImageError } from '../utils/imageFallback';
+import { RealtimeVisualizer } from './RealtimeVisualizer';
 
 interface ImmersivePlayerModalProps {
   isOpen: boolean;
@@ -393,6 +394,19 @@ export const ImmersivePlayerModal: React.FC<ImmersivePlayerModalProps> = ({
               />
             </button>
           </div>
+        </div>
+
+        {/* ----------------------------------------------------------- */}
+        {/* STUDIO AUDIO VISUALIZER (Real-Time Frequency Canvas)       */}
+        {/* ----------------------------------------------------------- */}
+        <div className="w-full max-w-[310px] sm:max-w-[340px] md:max-w-[360px] p-2.5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/[0.08] shadow-lg">
+          <RealtimeVisualizer
+            isPlaying={isPlaying}
+            accentColor={primaryAccent}
+            height={38}
+            interactive={true}
+            showHUD={true}
+          />
         </div>
 
         {/* ----------------------------------------------------------- */}
