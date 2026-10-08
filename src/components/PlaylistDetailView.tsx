@@ -44,11 +44,11 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
   isFavorite,
   isDownloaded,
 }) => {
-  const playlistTracks = playlist.trackIds
-    .map((id) => tracks.find((t) => t.id === id))
+  const playlistTracks = (playlist?.trackIds || [])
+    .map((id) => (tracks || []).find((t) => t && t.id === id))
     .filter(Boolean) as Track[];
 
-  const totalDuration = playlistTracks.reduce((acc, t) => acc + t.duration, 0);
+  const totalDuration = playlistTracks.reduce((acc, t) => acc + (t?.duration || 0), 0);
   const totalMins = Math.round(totalDuration / 60);
 
   return (
@@ -56,7 +56,7 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
       {/* Back button */}
       <button
         onClick={onBack}
-        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back to Library</span>
@@ -68,7 +68,16 @@ export const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({
           className="w-40 h-40 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-2xl border border-white/[0.1] relative overflow-hidden"
           style={{ background: playlist.coverGradient || 'linear-gradient(135deg, #090a0f, #1e1b4b)' }}
         >
-          <Music className="w-16 h-16 text-white/80" />
+          {playlist.coverUrl ? (
+            <img
+              src={playlist.coverUrl}
+              alt={playlist.name}
+              onError={handleImageError}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Music className="w-16 h-16 text-white/80" />
+          )}
         </div>
 
         <div className="space-y-3 flex-1 min-w-0">

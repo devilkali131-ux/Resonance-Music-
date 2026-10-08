@@ -255,6 +255,48 @@ export default function App() {
     setStorageStats(offlineStorage.getStorageStats(tracks));
   }, [downloadedTrackIds, tracks]);
 
+  // Global Keyboard Shortcuts for studio music player control
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        audioEngine.togglePlay();
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        audioEngine.seek(Math.min(duration, currentTime + 5));
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        audioEngine.seek(Math.max(0, currentTime - 5));
+      } else if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        const newVol = Math.min(1, volume + 0.05);
+        setVolume(newVol);
+        audioEngine.setVolume(newVol);
+      } else if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        const newVol = Math.max(0, volume - 0.05);
+        setVolume(newVol);
+        audioEngine.setVolume(newVol);
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsMuted((prev) => !prev);
+        audioEngine.toggleMute();
+      } else if (e.key === 'l' || e.key === 'L') {
+        if (currentTrack) {
+          mlService.toggleFavorite(currentTrack.id);
+          setFavoriteTrackIds(mlService.getFavoriteTrackIds());
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentTime, duration, volume, currentTrack]);
+
   // Handle Play/Pause
   const handleTogglePlay = () => {
     audioEngine.togglePlay();

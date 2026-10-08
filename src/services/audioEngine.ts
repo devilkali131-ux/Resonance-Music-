@@ -59,7 +59,6 @@ class AudioEngine {
   private initAudioElement() {
     this.audio = new Audio();
     this.audio.preload = 'metadata';
-    this.audio.crossOrigin = 'anonymous';
 
     this.audio.addEventListener('timeupdate', () => this.notify());
     this.audio.addEventListener('play', () => {
@@ -122,6 +121,38 @@ class AudioEngine {
     });
   }
 
+  private updateMediaSession(track: Track) {
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator && track) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title,
+          artist: track.artist,
+          album: track.album || 'Resonance Music',
+          artwork: [
+            { src: track.coverUrl, sizes: '96x96', type: 'image/jpeg' },
+            { src: track.coverUrl, sizes: '128x128', type: 'image/jpeg' },
+            { src: track.coverUrl, sizes: '256x256', type: 'image/jpeg' },
+            { src: track.coverUrl, sizes: '512x512', type: 'image/jpeg' },
+          ],
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          this.togglePlay();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          this.pause();
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined) {
+            this.seek(details.seekTime);
+          }
+        });
+      } catch {
+        // Media session fallback
+      }
+    }
+  }
+
   private ensureAudioContext() {
     if (!this.audioCtx && typeof window !== 'undefined') {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -158,18 +189,6 @@ class AudioEngine {
 
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume();
-    }
-
-    // Connect audio element if not connected
-    if (this.audio && this.audioCtx && !this.isConnectedToWebAudio && this.bassFilter) {
-      try {
-        this.sourceNode = this.audioCtx.createMediaElementSource(this.audio);
-        this.sourceNode.connect(this.bassFilter);
-        this.isConnectedToWebAudio = true;
-      } catch (err) {
-        // Source node already connected or cross-origin security constraint
-        console.warn('Audio graph connection note:', err);
-      }
     }
   }
 
@@ -311,16 +330,11 @@ class AudioEngine {
 
   private async playAudioElement(track: Track, startTime = 0) {
     if (!this.audio) return;
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      try {
-        await this.audioCtx.resume();
-      } catch {
-        // user interaction pending
-      }
-    }
+    this.updateMediaSession(track);
 
     try {
       this.audio.volume = this.isMuted ? 0 : this.volume;
+      this.audio.muted = this.isMuted;
       if (track.audioUrl && !track.audioUrl.includes('soundhelix') && !track.audioUrl.includes('freesound.org')) {
         this.audio.src = track.audioUrl;
         this.audio.currentTime = startTime;
@@ -869,6 +883,14 @@ class AudioEngine {
       sleepTimerRemainingSec: this.getSleepTimerRemainingSeconds(),
       sleepTimerMinutes: this.getSleepTimerMinutes(),
     };
+
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
+      } catch {
+        // ignore
+      }
+    }
 
     this.listeners.forEach((cb) => cb(payload));
   }

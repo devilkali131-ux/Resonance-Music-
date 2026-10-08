@@ -283,8 +283,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   // 2x2 Collage Artwork generator for playlist thumbnails
   const renderCollage = (trackIds: string[]) => {
-    const list = trackIds
-      .map((id) => tracks.find((t) => t.id === id))
+    const list = (trackIds || [])
+      .map((id) => (tracks || []).find((t) => t && t.id === id))
       .filter(Boolean) as Track[];
 
     if (list.length >= 4) {
@@ -292,9 +292,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <div className="grid grid-cols-2 grid-rows-2 w-full h-full">
           {list.slice(0, 4).map((t, idx) => (
             <img
-              key={idx}
+              key={t.id || idx}
               src={t.coverUrl}
-              alt=""
+              alt={t.title || ''}
               onError={handleImageError}
               className="w-full h-full object-cover"
             />
@@ -307,7 +307,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       return (
         <img
           src={list[0].coverUrl}
-          alt=""
+          alt={list[0].title || ''}
           onError={handleImageError}
           className="w-full h-full object-cover"
         />
