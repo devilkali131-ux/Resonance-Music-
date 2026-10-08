@@ -74,7 +74,18 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  const logoClicksRef = useRef<number[]>([]);
+
   const handleLogoClick = () => {
+    const now = Date.now();
+    logoClicksRef.current = [...logoClicksRef.current.filter((t) => now - t < 1500), now];
+    if (logoClicksRef.current.length >= 3) {
+      logoClicksRef.current = [];
+      if (onOpenOwnerPortal) {
+        onOpenOwnerPortal();
+        return;
+      }
+    }
     if (onNavigateTab) onNavigateTab('daily');
   };
 

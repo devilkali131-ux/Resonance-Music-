@@ -158,61 +158,31 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
   return (
     <div className="space-y-6 pb-44 animate-fadeIn select-none">
-      {/* Search Input Bar with Dictionary Autocomplete Chips */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-[#0c0e18]/85 border border-white/[0.1] backdrop-blur-2xl shadow-xl space-y-3">
-        <div className="relative flex items-center">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400" />
-          <input
-            type="text"
-            value={localSearchInput}
-            onChange={(e) => {
-              setLocalSearchInput(e.target.value);
-              if (onSearchChange) onSearchChange(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleApplySearch(localSearchInput);
-              }
-            }}
-            placeholder="Search songs, artists, playlists, or global hits..."
-            className="w-full pl-10 pr-24 py-2.5 sm:py-3 text-xs sm:text-sm bg-black/40 border border-white/[0.08] focus:border-cyan-400/60 rounded-2xl text-white placeholder:text-slate-500 focus:outline-none transition-all"
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            {localSearchInput && (
+      {/* Search Scope & Category Filter Tabs (Visible when search is active) */}
+      {isSearchActive && (
+        <div className="p-3.5 sm:p-4 rounded-3xl bg-[#0c0e18]/85 border border-white/[0.1] backdrop-blur-2xl shadow-xl space-y-3">
+          {/* Quick Search Dictionary Filter Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-[11px] font-mono uppercase text-slate-400 flex items-center gap-1 flex-shrink-0">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              Filter:
+            </span>
+            {SEARCH_DICTIONARY_SUGGESTIONS.map((term) => (
               <button
-                onClick={() => handleApplySearch('')}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
-                title="Clear"
+                key={term}
+                onClick={() => handleApplySearch(term)}
+                className={`px-2.5 py-1 rounded-xl text-xs whitespace-nowrap transition-all border cursor-pointer ${
+                  searchFilter.toLowerCase() === term.toLowerCase()
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-sm'
+                    : 'bg-white/[0.03] text-slate-400 hover:text-white hover:bg-white/[0.08] border-white/[0.06]'
+                }`}
               >
-                <X className="w-4 h-4" />
+                {term}
               </button>
-            )}
+            ))}
           </div>
-        </div>
 
-        {/* Quick Search Dictionary Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-[11px] font-mono uppercase text-slate-400 flex items-center gap-1 flex-shrink-0">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
-            Quick:
-          </span>
-          {SEARCH_DICTIONARY_SUGGESTIONS.map((term) => (
-            <button
-              key={term}
-              onClick={() => handleApplySearch(term)}
-              className={`px-2.5 py-1 rounded-xl text-xs whitespace-nowrap transition-all border cursor-pointer ${
-                searchFilter.toLowerCase() === term.toLowerCase()
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-sm'
-                  : 'bg-white/[0.03] text-slate-400 hover:text-white hover:bg-white/[0.08] border-white/[0.06]'
-              }`}
-            >
-              {term}
-            </button>
-          ))}
-        </div>
-
-        {/* Search Scope Filter Tabs (All, Songs, Playlists, Global Hits & Trending) */}
-        {isSearchActive && (
+          {/* Search Scope Filter Tabs (All, Songs, Playlists, Global Hits & Trending) */}
           <div className="flex items-center gap-1.5 pt-2 border-t border-white/[0.06] overflow-x-auto scrollbar-none">
             <button
               onClick={() => setCategoryFilter('all')}
@@ -257,8 +227,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               <span>Global Hits & Online ({externalSearchResults.length})</span>
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ============================================================== */}
       {/* CASE A: USER SEARCHED -> FILTER ACROSS PLAYLISTS & MUSIC       */}

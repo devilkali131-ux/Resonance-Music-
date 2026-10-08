@@ -290,6 +290,9 @@ export default function App() {
           mlService.toggleFavorite(currentTrack.id);
           setFavoriteTrackIds(mlService.getFavoriteTrackIds());
         }
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
+        e.preventDefault();
+        setIsOwnerPortalOpen(true);
       }
     };
 
