@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0d18" />
+      <stop offset="100%" stop-color="#04060b" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="cyanGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.8" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rectangle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  <rect width="512" height="512" rx="128" fill="none" stroke="url(#cyanGlow)" stroke-width="4" stroke-opacity="0.3" />
+
+  <!-- Ambient Glow circle in the center -->
+  <circle cx="256" cy="256" r="140" fill="url(#primaryGrad)" opacity="0.18" filter="url(#glow)" />
+
+  <!-- Iconic V Soundwave Glyph for Veltra Music -->
+  <g filter="url(#glow)">
+    <!-- Left Wing of V -->
+    <path d="M 120 140 L 220 370 C 236 405 276 405 292 370 L 392 140 C 400 120 376 104 360 122 L 256 310 L 152 122 C 136 104 112 120 120 140 Z" fill="url(#primaryGrad)" />
+    
+    <!-- Central Soundwave Bars in V Core -->
+    <rect x="246" y="170" width="20" height="90" rx="10" fill="#ffffff" opacity="0.95" />
+    <rect x="210" y="200" width="16" height="50" rx="8" fill="#00f0ff" />
+    <rect x="286" y="200" width="16" height="50" rx="8" fill="#ec4899" />
+  </g>
+</svg>

@@ -48,10 +48,13 @@ jobs:
       - name: Configure Capacitor Android
         run: |
           mkdir -p release-output
-          npx cap add android || true
+          if [ ! -f "android/build.gradle" ]; then
+            npx cap add android || true
+          fi
           npx cap sync android
           if [ -d "android" ]; then
             echo "sdk.dir=/usr/local/lib/android/sdk" > android/local.properties
+            chmod +x android/gradlew || true
           fi
 
       - name: Compile Android APK with Gradle

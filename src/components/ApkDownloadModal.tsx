@@ -6,13 +6,11 @@ import {
   ExternalLink,
   Copy,
   Check,
-  Sparkles,
-  ShieldCheck,
   Zap,
   Globe,
   Github,
   QrCode,
-  ArrowRight,
+  Share2,
 } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
@@ -27,6 +25,8 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
 }) => {
   const { isInstallable, install } = usePWAInstall();
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
 
   if (!isOpen) return null;
@@ -51,6 +51,25 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
     navigator.clipboard.writeText(appUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareApp = async () => {
+    const shareData = {
+      title: 'Resonance Music - Stream & Studio Sound',
+      text: '🎵 Check out Resonance Music! Install the Android app for lossless stream & offline listening:',
+      url: appUrl,
+    };
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShared(true);
+        setTimeout(() => setShared(false), 2500);
+      } catch {
+        handleCopyLink();
+      }
+    } else {
+      handleCopyLink();
+    }
   };
 
   const handleNativeInstall = async () => {
@@ -86,14 +105,14 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                  Download Resonance Music
+                  Download & Share App
                 </h3>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
                   Android APK & PWA
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Native Android package & standalone home screen install
+                Install on your device or share with friends & listeners
               </p>
             </div>
           </div>
@@ -106,6 +125,49 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
             <X className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
+
+        {/* Share with Friends Card */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-500/15 via-purple-500/10 to-cyan-500/15 border border-pink-400/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+          <div className="space-y-0.5 text-center sm:text-left">
+            <div className="flex items-center justify-center sm:justify-start gap-2">
+              <Share2 className="w-4 h-4 text-pink-400" />
+              <h4 className="text-sm font-bold text-white">Share App with Friends</h4>
+            </div>
+            <p className="text-xs text-slate-300">
+              Share the instant installation link via WhatsApp, Telegram, or SMS.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={handleShareApp}
+              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all active:scale-95"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{shared ? 'Shared!' : 'Share to People'}</span>
+            </button>
+            <button
+              onClick={() => setShowQr(!showQr)}
+              className="p-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/20 text-white transition-all cursor-pointer"
+              title="Show QR Code"
+            >
+              <QrCode className="w-4 h-4 text-cyan-300" />
+            </button>
+          </div>
+        </div>
+
+        {/* Optional QR Code Popup */}
+        {showQr && (
+          <div className="p-4 rounded-2xl bg-white/5 border border-cyan-400/30 flex flex-col items-center justify-center space-y-2 animate-fadeIn">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                appUrl
+              )}`}
+              alt="Scan to Install Resonance Music"
+              className="w-36 h-36 rounded-xl bg-white p-2 shadow-xl"
+            />
+            <p className="text-xs text-slate-300 font-medium">Scan with any phone camera to install</p>
+          </div>
+        )}
 
         {/* Method 1: Instant Native Android App Installation (WebAPK) */}
         <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-cyan-500/15 via-blue-500/10 to-indigo-500/15 border border-cyan-400/40 space-y-3 relative overflow-hidden">
@@ -120,7 +182,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
                 </h4>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Installs Resonance Music as a full standalone Android app with home screen icon, media controls, and zero address bar.
+                Installs Resonance Music as a standalone Android app with home screen icon, lock screen controls, and offline audio downloads.
               </p>
             </div>
             <Zap className="w-6 h-6 text-cyan-400 flex-shrink-0" />
@@ -153,12 +215,12 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
                 <h4 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
                   <span>GitHub Repository APK Release</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30">
-                    Latest v2.4.0
+                    Latest Release
                   </span>
                 </h4>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Download the pre-compiled Android <strong className="text-purple-300">Resonance-Music.apk</strong> package directly from our official GitHub repository releases, or browse the open-source code.
+                Download the pre-compiled Android <strong className="text-purple-300">Resonance-Music.apk</strong> package directly from our GitHub releases, or view source code.
               </p>
             </div>
           </div>
@@ -171,7 +233,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
               className="py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              <span>Download APK (~12MB)</span>
+              <span>Download APK</span>
             </a>
 
             <a
@@ -200,7 +262,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
                 </h4>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Generate a ready-to-install signed Android <strong className="text-cyan-300">.apk</strong> or Google Play Store package via PWABuilder for this app URL.
+                Generate and download signed Android <strong className="text-cyan-300">.apk</strong> or Google Play Store package via PWABuilder for this app URL.
               </p>
             </div>
             <Smartphone className="w-6 h-6 text-indigo-400 flex-shrink-0" />
@@ -218,7 +280,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
           </a>
         </div>
 
-        {/* Method 3: Mobile Chrome Browser 2-Click Install Guide */}
+        {/* Mobile Chrome Browser 2-Click Install Guide */}
         <div className="p-4 rounded-2xl bg-black/40 border border-white/[0.06] space-y-2.5">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
             <Globe className="w-4 h-4 text-cyan-400" />
@@ -235,7 +297,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
               Tap <strong className="text-cyan-300">"Install app"</strong> or <strong className="text-cyan-300">"Add to Home screen"</strong>.
             </li>
             <li>
-              Confirm install — Android will generate and place the <strong className="text-white">Resonance Music</strong> app directly on your phone!
+              Confirm install — Android will place the <strong className="text-white">Resonance Music</strong> app directly on your phone and app drawer!
             </li>
           </ol>
         </div>

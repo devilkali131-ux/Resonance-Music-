@@ -14,7 +14,6 @@ import {
   Download,
 } from 'lucide-react';
 import { ActiveTab, Playlist } from '../types/music';
-import { PWAInstallButton } from './PWAInstallButton';
 
 export type { ActiveTab };
 
@@ -238,11 +237,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
         )}
-      </div>
-
-      {/* In-app Download PWA Action */}
-      <div className="px-3 pt-2">
-        <PWAInstallButton variant="sidebar" />
       </div>
 
       {/* Offline Status Footer Card */}

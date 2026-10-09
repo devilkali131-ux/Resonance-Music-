@@ -41,23 +41,26 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Resilient helper to invoke Gemini without throwing uncaught quota or network errors
 async function callGeminiSafely(prompt: string, schema: any) {
   if (!ai) return null;
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-      },
-    });
-    return JSON.parse(response.text || '{}');
-  } catch (err: any) {
-    console.warn(
-      'Gemini API notice (using localized machine learning curation):',
-      err?.message || 'Quota or limit reached'
-    );
-    return null;
+  const modelsToTry = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      if (response?.text) {
+        return JSON.parse(response.text);
+      }
+    } catch {
+      // Gracefully continue to next model or localized algorithmic curation
+      continue;
+    }
   }
+  return null;
 }
 
 // Personalized Daily Recommendations endpoint
